@@ -1,0 +1,46 @@
+---
+title: "Chapter 2"
+author: "Marcus Becker"
+date: "March 31, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+
+library(socviz)
+
+```
+
+#
+
+```{r}
+
+titanic
+
+class(titanic)
+summary(titanic)
+
+titanic_tb <- as_tibble(titanic)
+titanic_tb
+
+```
+
+
+```{r }
+
+library(gapminder)
+
+gapminder
+
+p <- 
+  ggplot(data = gapminder, aes(x = gdpPercap, y = lifeExp)) +
+  geom_point()
+
+p
+
+
+```
+
+
