@@ -1,0 +1,130 @@
+---
+title: "Data Visualization - A Practical Introduction"
+author: "Marcus Becker"
+date: "March 31, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+
+library(socviz)
+
+```
+
+# Chapter 2
+
+```{r}
+
+titanic
+
+class(titanic)
+summary(titanic)
+
+titanic_tb <- as_tibble(titanic)
+titanic_tb
+
+```
+
+
+```{r }
+
+library(gapminder)
+
+gapminder
+
+p <- 
+  ggplot(data = gapminder, aes(x = gdpPercap, y = lifeExp)) +
+  geom_point()
+
+p
+
+
+```
+
+# Chapter 3
+
++ Mappings link data to things you see.
++ The `mapping = aes(...)` argument *links variables to things you will see in the plot*.
++ A mapping says which variables in the data will be represented by visual elements like a colour, shape, or a point in the plot area.
+
+```{r}
+
+# Basic ggplot object with mappings
+plot1 <- 
+  ggplot(data = gapminder, mapping = aes(x = gdpPercap, y = lifeExp))
+
+# Add a layer by choosing a geom
+plot2 <- plot1 + 
+  geom_smooth(method = "gam") +
+  geom_point()
+
+plot2 + scale_x_log10(labels = scales::comma)
+
+# library(scales)
+
+```
+
++ Mapping aesthetics vs. setting them
+
+```{r}
+
+plot3 <- plot1 +
+  geom_smooth(method = "loess") +
+  geom_point(color = "purple") +
+  scale_x_log10(label = scales::dollar)
+
+plot4 <- plot1 +
+  geom_smooth(color = "orange", size = 4, method = "lm", se = FALSE) +
+  geom_point(alpha = 0.3) +
+  scale_x_log10(label = scales::dollar)
+
+plot4
+
+plot1 <- ggplot(data = gapminder, mapping= aes(x = gdpPercap, y = lifeExp))
+
+plot5 <- plot1 +
+  geom_point(mapping = aes(color = log(pop)), alpha = 0.8) +
+  geom_smooth(method = "loess") +
+  scale_x_log10(labels = scales::dollar) +
+  labs(x = "GDP Per Capita",
+       y = "Life Expectancy in Years",
+       title = "Economic Growth and Life Expectancy",
+       subtitle = "Data points are county-years",
+       caption = "Source: Gapminder")
+
+plot5
+
+```
+
+# Where to go next
+
+```{r}
+
+plot1 + geom_point() + geom_smooth()
+plot1 + geom_smooth() + geom_point()
+
+plot6 <- ggplot(data = gapminder, mapping = aes(x = pop, y = lifeExp))
+
+plot6 + geom_point()
+
+plot1 + geom_point() + scale_y_sqrt()
+plot1 + geom_point() + scale_y_reverse()
+
+ggplot(data = gapminder, mapping = aes(x = gdpPercap, y = lifeExp, color = factor(year))) + geom_point()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
