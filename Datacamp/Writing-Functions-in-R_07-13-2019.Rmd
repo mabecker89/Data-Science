@@ -1,0 +1,370 @@
+---
+title: "Writing Functions in R"
+author: "Marcus Becker"
+date: "July 10, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+# Writing Functions in R
+
+Taught by Hadley and Charlotte Wickham
+
+## A Quick Refresher
+
+```{r}
+
+# Defining your own function
+my_fun <- function(arg1, arg2) {
+  body
+}
+
+# e.g.
+add <- function(x, y) {
+  x + y # Body, i.e. the R code that your function will execute, referring to the inputs by the argument names you specify. 
+}
+
+add(5,3)
+
+# Every function has three components: the formal arguments, the body, and the environment
+
+# The last expression evaluated in a function is the return value
+# e.g.
+f1 <- function(x) {
+  if (x < 0) {
+    -x
+  } else {
+    x
+  }
+}
+f1(-5) # This function returns the absolute value.
+
+# Functions are objects! Just like any other. i.e. can assign them a name and they are aliiiiiiive.
+# Functions without a name are called anonymous functions.
+# e.g.
+(function(x) {x + 1})(2)
+
+# Practice
+ratio <- function(x, y) {
+  x / y
+}
+
+ratio(3, 4)
+
+# Scoping describes how R looks up values by name. 
+
+# An e.g.
+m <- function(x) {
+  l <- function(x) x * 2
+  l(10)
+}
+
+m(10)
+
+# Each call to a function has its own clean environment.
+# an e.g. 
+j <- function() {
+  if (!exists("a")) { # i.e. if a doesn't exist, then ... 
+    a <- 1 # assign a as 1
+  } else { # If not,
+    a <- a + 1 # Add 1 to the existing a
+  }
+  print(a)
+}
+
+j()
+# Any variables created in the local environment (i.e. within the function) are never available in the global environment.
+# A function will first look in the local environment for a variable to be specified, and if not there, then look to the global environment (or the next highest environment)
+
+# Data structures in R:
+
+# 1. Two types of vectors in R:
+#   - Atomic vectors of six types: logical, integer, double, character, complex, and raw
+#   - Lists, aka recursive vectors, because lists can contain other lists. 
+
+#   - Atomic vectors are homogenous (always the same type), but lists can be heterogeneous.
+#   - Subset lists with [ (sublists), [[ (element), or $
+
+# 2. Missing values
+#   - NULL - often used to indicate the absence of a vector 
+#   - NA - Used to indicate the absence of a value in a vector, aka a missing value.
+
+
+# for loops - used for iteration.
+df <- data.frame(
+  a = rnorm(10),
+  b = rnorm(10),
+  c = rnorm(10),
+  d = rnorm(10)
+)
+
+for (i in 1:ncol(df)) { # the sequence - 'i' is the name given to the object that indexes the iteration; the length of the values                              that i should iterate over
+  print(median(df[[i]])) # body - describes the actions.
+}
+
+# Use seq_along - handles empty dataframes better. 
+
+for (i in seq_along(df)) {
+  print(median(df[[i]]))
+}
+
+# Store output of for loop
+output <- vector("double", ncol(df)) # Empty output (for now)
+for (i in seq_along(df)) {
+  output[[i]] <- mean(df[[i]])
+}
+output
+
+
+```
+
+## When and how you should write a function
+
+```{r}
+
+# If you have copied-and-pasted twice, it's time to write a function. 
+
+# How should you write a function?
+# - Start with a simple problem
+# - Get a working snippet of code
+# - Rewrite to use temporary variables
+# - Rewrite for clarity
+# - Finally, turn into a function
+
+# What makes a good function?
+# - Use good names for functions and arguments
+# - Use an intuitive argument order and reasonable default values
+# - Make it clear what the function returns
+# - Use good style inside the body of the funtion
+
+```
+
+# Introducing the purrr package
+
+```{r}
+
+library(purrr)
+
+# map_ functions in purrr take a vector (.x) as the first argument followed by a function (.f) as the second.
+
+# the type of object returned is determined by the function's suffix (e.g. map_dbl() returns a double vector)
+
+library(nycflights13)
+
+df_planes <- planes %>%
+  select(year, engines, seats, speed)
+
+# Find the column means of df_plans by combining map_dbl() with mean()
+
+map_dbl(.x = df_planes, .f = mean, na.rm = TRUE)
+
+# split() functions
+
+cyl <- split(mtcars, mtcars$cyl) # a list. of three dataframes. 
+# Extract first element
+four_cyls <- cyl[[1]] # corresponds to 4-cyl cars. 
+
+# Can define a function anonymously inside of map (rather than defining it in our global environment)
+
+map(cyl, ~ lm(mpg ~ wt, data = .)) # Use the ~ 
+
+map(cyl, ~ mean(.$disp))
+
+
+```
+
+# Chapter 4: Advanced Inputs and Outputs
+
+```{r}
+
+# safely() is an adverb -> use it on a verb i.e. a function.
+
+urls <- list(
+  example = "http://example.org",
+  rproj = "http://www.r-project.org",
+  asdf = "http://asdfasdasdkfjlda"
+)
+
+map(urls, readLines) # Fails spectacularly.
+
+safely_readLines <- safely(readLines)
+
+html <- map(urls, safely_readLines) # This works, but the info isn't particularly easy to access. 
+
+# transpose() function reshapes a list so the inner-most level becomes the outer-most level.
+
+res <- transpose(html)[["result"]]
+err <- transpose(html)[["error"]]
+
+# Remember that you can embed a logical vector within single square brackets to subset a list accordingly (ie what's TRUE)
+
+is_ok <- map_dbl(err, is_null)
+# Extract successful results
+res[is_ok]
+# Extract the URLs that were unsuccessful
+urls[!is_ok]
+
+# Maps over multiple arguments
+
+# Use map2() to iterate over two arguments
+rnorm(5, mean = 1)
+rnorm(10, mean = 5)
+rnorm(20, mean = 10)
+
+map2(list(5, 10, 20), list(1, 5, 10), rnorm) # Has an additional argument (.y) which allows us to specify another object to iterate over
+
+pmap() # iterate over many arguments
+
+n <- list(5, 10, 20)
+mu <- list(1, 5, 10)
+sd <- list(0.1, 1, 0.1)
+
+pmap(list(n, mu, sd), rnorm) # by default, pmap matches the elements of the list to the arguments in the function by position.
+# Better to provide names
+pmap(list(n = n, mean = mu, sd = sd), rnorm)
+
+
+invoke_map() # iterate over functions and arguments
+# list of functions come first
+funs <- c(rnorm, runif)
+# define params for each function
+param_rnorm <- list(mean = 10)
+param_unif <- list(min = 0, max = 5)
+# combine params into a list
+params_list <- list(param_rnorm, param_unif)
+
+invoke_map(funs, params_list, n = 15) # n=15 is a global option
+
+# Maps with side effects
+walk() 
+
+# Describe things that happen beyond the results of a function
+# e.g. print output, plots, writing files to disk, etc. 
+walk2()
+pwalk()
+
+plots <- cyl %>%
+  map(~ ggplot(., aes(mpg, wt)) + geom_point())
+
+paths <- paste0(names(plots), ".pdf")
+
+walk2(paths, plots, ggsave)
+
+# an e.g.
+
+funs <- list(Normal = "rnorm",
+             Uniform = "runif",
+             Exp = "rexp")
+
+params <- list(Normal = list(mean = 10),
+               Uniform = list(min = 0, max = 5),
+               Exp = list(rate = 5))
+
+sims <- invoke_map(funs, params, n = 5000) # Iterate over both functions AND parameters.
+
+walk(sims, hist)
+
+# Use walk2() to vary two arguments
+
+breaks_list <- list(
+  Normal = seq(6, 16, 0.5),
+  Uniform = seq(0, 5, 0.25),
+  Exp = seq(0, 1.5, 0.1)
+)
+
+walk2(sims, breaks_list, hist) # Not sure why breaks_list goes before hist here.
+
+# Let's write a function to improve our choice of breaks.
+
+find_breaks <- function(x) {
+  rng <- range(x, na.rm = TRUE)
+  seq(rng[1], rng[2], length.out = 30) # Just like ggplot
+}
+
+find_breaks(sims[[1]])
+
+# Use map() to iterate find_breaks() over sims
+nice_breaks <- map(sims, find_breaks)
+
+# Use walk2 to iterate over both sims and nice_breaks, using hist
+walk2(sims, nice_breaks, hist, xlab ="")
+
+# pwalk is used to iterate over many arguments, not just two.
+nice_titles <- c("Normal(10, 1)", "Uniform(0, 5)", "Exp(5)")
+
+pwalk(list(x = sims, breaks = nice_breaks, main = nice_titles), hist, xlab = "")
+
+# Some serious functional programming going on here. Now, let's walk with pipes. 
+
+sims %>%
+  walk(hist) %>%
+  map(summary)
+
+```
+
+# Chapter 5: Robust Functions
+
+```{r}
+
+# Robust Functions
+
+# Using stopifnot() is a quick way to have your function stop, if a condition isn't met. 
+
+# stop() allows you to specify a more informative error message. 
+
+# Define troublesome x and y
+x <- c(NA, NA, NA)
+y <- c( 1, NA, NA, NA)
+
+both_na <- function(x, y) {
+  if (length(x) != length(y)) {
+    stop("x and y must have the same length", call. = TRUE) # Error message should tell user what should be true, not what is false.
+  } 
+  sum(is.na(x) & is.na(y))
+}
+
+both_na(x, y)
+
+# Surprises due to unstable types
+# Type-consistent: the type of the return object depends on the input
+# map() functions in purrr are always type-consistent. 
+
+# Non-standard evaluation functions e.g. subset or filter 
+
+big_x <- function(df, threshold) {
+  # write a check for x not being in df
+  if (!"x" %in% colnames(df)) {
+    stop("df must contain a variable called x", call. = FALSE)
+  }
+  # write a check requiring threshold to be a column in df
+  if ("threshold" %in% colnames(df)) {
+    stop("df must not contain variable called threshold", call. = FALSE)
+  }
+  dplyr::filter(df, x > threshold)
+}
+
+big_x(diamonds, 7)
+
+# Hidden arguments
+# Viewing global options
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
