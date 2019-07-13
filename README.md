@@ -2,11 +2,11 @@
 
 This repository is full of code from my ongoing data science learning journey. 
 
+---
+
 ## Data Visualization - Healy
 
 Working through the book, *Data Visualization: A Practical Introduction*, by Kieran Healy
-
----
 
 Chapter 1
 
