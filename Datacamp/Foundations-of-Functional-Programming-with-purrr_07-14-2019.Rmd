@@ -1,0 +1,133 @@
+---
+title: "Foundations of Functional Programming with purrr"
+author: "Marcus Becker"
+date: "July 14, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+
+```
+
+# Chapter 1: Simplifying Iteration and Lists With purrr
+
+```{r}
+
+# purrr makes iteration easy - it wraps a for loop into a single function: map
+
+# Iteration is the process of doing the same process to multiple inputs. 
+
+# map(object, function) - object can be a vector or a list
+
+object1 <- list(first = c(1, 2, 3),
+               second = c(4, 5, 6),
+               third = c(7, 8, 9))
+
+map(object, sum)
+
+object2 <- list(first = c("1", "2", "3"),
+                second = c("4", "5", "6"),
+                third = c("7", "8", "9"))
+
+class(object2$first)
+class(object2[[1]])
+class(object2[["first"]]) 
+
+# Change each element from a character to a number using a for loop
+
+for (i in seq_along(object2)) {
+  object2[[i]] <- as.numeric(object2[[i]])
+}
+
+print(object2) # now are numbers. 
+
+# How about using map? Let's change back to character.
+
+object2 <- map(object2, as.character)
+
+print(object2) # back to characters. 
+
+# Subsetting lists - slightly different than a df
+
+mtcars[1, "mpg"] # in a df, use square brackets - first number is the row, second is the column. Or,
+mtcars$mpg
+
+# now, a list on the other hand ...
+object2[[1]] # first element
+object2[["first"]] # can also call it by name using quotes. 
+
+# Let's load the repurrrsive package
+library(repurrrsive)
+
+data("wesanderson")
+str(wesanderson)
+str(wesanderson[[1]]) # GrandBudapest
+str(wesanderson$GrandBudapest)
+wesanderson[[1]][3] # pull out third element of the first vector
+
+data("sw_films")
+
+str(sw_films)
+sw_films[[1]]["title"] # A New Hope!
+
+# The many flavours of map - standard map() just returns a list.
+
+map_dbl() # double, a type of numeric. Gives us a vector. 
+map_lgl() # logical
+map_chr() # character
+
+map(wesanderson, length) # is equivalent to ...
+map(wesanderson, ~ length(.x)) # OK. But this notation is convenient for ...
+map_dbl(wesanderson, ~ length(.x))
+map_dfr(wesanderson, ~length(.x))
+object3 <- data.frame(numcolors = map_dbl(wesanderson, ~ length(.x))) %>%
+  rownames_to_column(var = "Movie") # cool. 
+
+```
+
+# Chapter 2: More Complex Iterations
+
+```{r}
+
+names(wesanderson) # Find out names of objects in a list.
+
+# If no names, use set_names() in a pipe
+sw_films_named <- sw_films %>%
+  set_names(map_chr(., "title"))
+
+names(sw_films_named)
+
+# Idea for ABMI work: store species data in a list, then use map to iteratively run models on those species. Cool. 
+
+# Simulating data 
+
+sites <- list("north", "east", "west")
+
+list_of_df <- map(sites,
+                  ~ data.frame(sites = .x,
+                               a = rnorm(mean = 5, n = 200, sd = (5/2)),
+                               b = rnorm(mean = 200, n = 200, sd = 15)))
+
+list_of_df[[1]]
+
+# Run a linear model
+
+list_of_df %>%
+  map(~ lm(a ~ b, data = .)) %>%
+  map(summary)
+
+# map() variants
+
+map(sw_films, ~ .x[["director"]]) # gives list
+map_chr(sw_films, ~.x[["director"]]) # gives character vector
+
+
+
+```
+
+ 
+
+
+
