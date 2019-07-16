@@ -1,0 +1,90 @@
+---
+title: 'Tidy Tuesday: Analyzing Tennis Tournaments in R'
+author: "Marcus Becker"
+date: "July 15, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE, echo = FALSE, warning = FALSE}
+
+library(tidyverse)
+
+# Load data
+
+player_dob <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-04-09/player_dob.csv")
+
+grand_slams <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-04-09/grand_slams.csv") %>%
+  arrange(year, grand_slam, name, gender) %>%
+  distinct(year, grand_slam, name, .keep_all = TRUE)
+
+grand_slam_timeline <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-04-09/grand_slam_timeline.csv")
+
+knitr::opts_chunk$set(echo = TRUE)
+
+theme_set(theme_light())
+
+```
+
+```{r}
+
+grand_slams %>%
+  count(year, gender) %>% # instead of group_by and summarise
+  arrange(desc(year))
+
+```
+
+
+# Exploration of the Winners
+
+```{r}
+
+# this is the grand_slams dataset
+
+grand_slams %>%
+  count(name, grand_slam, sort = TRUE) %>%
+  add_count(name, wt = n, name = "nn") %>%
+  filter(nn >= 8) %>%
+  mutate(name = fct_reorder(name, n, sum), # reorder name by the number of wins (for plotting)
+         grand_slam = str_to_title(str_replace(grand_slam, "_", " "))) %>%  
+  ggplot(mapping = aes(x = name, y = n, fill = grand_slam)) +
+  geom_col() +
+  coord_flip() +
+  labs(x = "",
+       y = "# of Grand Slam Tournaments Won",
+       title = "Tennis players with the most Grand Slam Tournament Wins",
+       subtitle = "1968-Present",
+       fill = "Grand Slam")
+  
+```
+
+```{r}
+
+library(lubridate)
+
+grand_slams_age <- player_dob %>%
+  select(name, date_of_birth) %>%
+  inner_join(grand_slams, by = "name") %>%
+  mutate(age = as.numeric(difftime(tournament_date, date_of_birth, unit = "days") / 365.25))
+
+grand_slams_age %>%
+  mutate(decade = 10 * (year(tournament_date)) %/% 10) %>% # Little hack to get at decade
+  ggplot(mapping = aes(x = decade, y = age, fill = gender, group = interaction(gender, decade))) +
+  geom_boxplot()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
