@@ -123,11 +123,42 @@ list_of_df %>%
 map(sw_films, ~ .x[["director"]]) # gives list
 map_chr(sw_films, ~.x[["director"]]) # gives character vector
 
-
-
 ```
 
- 
+# Chapter 3: Troubleshooting Lists with purrr
+
+```{r}
+
+safely()
+
+data("sw_people")
+
+str(sw_people)
+
+height_cm <- map(sw_people, ~.x[["height"]])
+
+height_cm <- map(sw_people, "height") %>% # equivalent to above.
+  map(function(x) {
+    ifelse(x == "unknown", NA, as.numeric(x))
+  })
+
+# Using possibly()
+
+height_cm <- map(sw_people, "height") 
+
+height_cm %>%  
+  map_dbl(possibly(function(x){
+  # Convert centimeters to feet
+    x * 0.0328084
+}, otherwise = NA_real_))  # Doesn't work. I'm not sure why not.
+
+# Using walk()
+
+
+  
+  
+```
+
 
 
 
