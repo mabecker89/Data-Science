@@ -105,7 +105,7 @@ names(sw_films_named)
 
 sites <- list("north", "east", "west")
 
-list_of_df <- map(sites,
+list_of_df <- map(si  tes,
                   ~ data.frame(sites = .x,
                                a = rnorm(mean = 5, n = 200, sd = (5/2)),
                                b = rnorm(mean = 200, n = 200, sd = 15)))
@@ -122,6 +122,26 @@ list_of_df %>%
 
 map(sw_films, ~ .x[["director"]]) # gives list
 map_chr(sw_films, ~.x[["director"]]) # gives character vector
+
+map(sw_films, ~.x[["episode_id"]])
+map_dbl(sw_films, ~.x[["episode_id"]])
+
+# map2() and pmap()
+
+# map2 takes two lists as two arguments: .x and .y
+
+means <- list(1, 2, 3)
+sites <- list("north", "west", "east")
+
+list_maps2 <-  map2(.x = means, .y = sites, ~ data.frame(sites = .y, a = rnorm(mean = .x, n = 200, sd = (5/2))))
+
+list_maps2
+
+# pmap for more than two lists as inputs - requires us to supply our lists a little bit differently.
+
+# create MASTER LIST first
+
+
 
 
 
