@@ -163,21 +163,111 @@ height_cm <- map(sw_people, "height") %>% # equivalent to above.
 
 # Using possibly()
 
-height_cm <- map(sw_people, "height") 
-
 height_cm %>%  
   map_dbl(possibly(function(x){
   # Convert centimeters to feet
     x * 0.0328084
-}, otherwise = NA_real_))  # Doesn't work. I'm not sure why not.
+}, otherwise = NA_real_)) 
 
-# Using walk()
+# Using walk() - keeps things quiet. 
 
+# uses a .x and .f argument, just like map()
 
+# works well with plots - no output to the console
 
-  
+data("gap_split")
+
+plots <- map2(.x = gap_split[1:10], .y = names(gap_split[1:10]),
+              ~ ggplot(.x, mapping = aes(x = year, y = lifeExp)) +
+                geom_line() +
+                labs(title = "Life expectancy through time"))
+
+walk(plots, print)
   
 ```
+
+# Chapter 4: Problem Solving with purrr
+
+```{r}
+
+data("gh_repos")
+
+str(gh_repos)
+
+gh_repos_names <- gh_repos %>%
+  map_chr(~ .x[[1]]$owner$login) %>%
+  set_names(gh_repos, .)
+
+gh_users_named <- gh_users %>%
+  set_names(map_chr(., "name"))
+
+names(gh_users_named)
+
+# Determine who joined github first
+map_chr(gh_users, ~.x[["created_at"]]) %>%
+      set_names(map_chr(gh_users, "name")) %>%
+    sort() # Looks like Jenny Bryan!
+
+# Determine user versus organization
+map_lgl(gh_users, ~.x[["type"]] == "User")
+
+
+# Determine who has the most public repositories
+map_int(gh_users, ~.x[["public_repos"]]) %>%
+    set_names(map_chr(gh_users, "name")) %>%
+    sort()
+
+# Even more complex problems
+
+# e.g. gh_repos is very long and complex.
+# Which repository is the largest?
+map(gh_repos,
+    ~ map_dbl(.x, ~ .x[["size"]])) %>%
+  # Grab the largest element
+  map(~max(.x))
+
+# Making plots
+
+# ggplot does not accept lists as input (only df) - so purrr can be used to go from list -> df using map_df
+
+map_df(gh_users, `[`, # this is the function here - apply [] to each list with login, name, etc as the arguments passed to []
+       c("login", "name", "followers", "public_repos")) %>%
+  ggplot(., aes(x = followers, y = public_repos)) +
+  geom_point()
+
+
+map_chr(sw_films, "title")
+
+# Turn data into correct dataframe format
+film_by_character <- tibble(filmtitle = map_chr(sw_films, "title")) %>%
+    mutate(filmtitle, characters = map(sw_films, "characters")) %>%
+    unnest()
+
+# Pull out elements from sw_people
+sw_characters <- map_df(sw_people, `[`, c("height","mass","name","url"))
+
+# Join our two new objects
+character_data <- inner_join(film_by_character, sw_characters, by = c("characters" = "url")) %>%
+    # Make sure the columns are numbers
+    mutate(height = as.numeric(height), mass = as.numeric(mass))
+
+# Plot the heights, faceted by film title
+ggplot(character_data, aes(x = height)) +
+  geom_histogram(stat = "count") +
+  facet_wrap(~ filmtitle)
+
+
+```
+
+
+
+
+
+
+
+
+
+
 
 
 
