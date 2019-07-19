@@ -1,0 +1,58 @@
+---
+title: "Intermediate Functional Programming with purrr"
+author: "Marcus Becker"
+date: "July 18, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+
+```
+
+# Chapter 1: Programming with purrr
+
+```{r}
+
+# map( .x, .f, ...) -> for each element of .x, do .f
+
+# json format often comes as a nested list in R
+
+visit_2014 <- c(2, 4, 6)
+visit_2015 <- c(3, 5, 7)
+visit_2016 <- c(4, 4, 4)
+
+lists <- list(visit_2014, visit_2015, visit_2016)
+
+pmap_dbl(lists, sum) # Matches each element up, instead of summing over the list itself.
+map_dbl(lists, sum) # Sums across the list. Hmmm. 
+
+# Use pmap when you want to take each sub-element one by one. 
+
+# mappers: anonymous function with a one-side formula. 
+
+as_mapper() # Create a mapper
+
+# e.g.
+
+visit_a <- c(117, 147, 131, 73)
+visit_b <- c(111, 113, 189, 34)
+visit_c <- c(94, 132, 59, 158)
+
+# The anonymous function approach
+map_dbl(visit_a, function(x) {
+  x * 24
+})
+
+# The mapper approach
+map_dbl(visit_a, ~ .x * 24)
+
+# Now, we could have defined the mapper ahead of time.
+to_day <- as_mapper(~ .x * 24)
+
+# and use it in our map calls.
+map_dbl(visit_b, to_day)
+
+```
+
