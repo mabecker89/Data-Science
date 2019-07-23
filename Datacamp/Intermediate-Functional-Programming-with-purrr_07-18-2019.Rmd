@@ -1,0 +1,154 @@
+---
+title: "Intermediate Functional Programming with purrr"
+author: "Marcus Becker"
+date: "July 18, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+
+```
+
+# Chapter 1: Programming with purrr
+
+```{r}
+
+# map( .x, .f, ...) -> for each element of .x, do .f
+
+# json format often comes as a nested list in R
+
+visit_2014 <- c(2, 4, 6)
+visit_2015 <- c(3, 5, 7)
+visit_2016 <- c(4, 4, 4)
+
+lists <- list(visit_2014, visit_2015, visit_2016)
+
+pmap_dbl(lists, sum) # Matches each element up, instead of summing over the list itself.
+map_dbl(lists, sum) # Sums across the list. Hmmm. 
+
+# Use pmap when you want to take each sub-element one by one. 
+
+# mappers: anonymous function with a one-side formula. 
+
+as_mapper() # Create a mapper
+
+# e.g.
+
+visit_a <- c(117, 147, 131, 73)
+visit_b <- c(111, 113, 189, 34)
+visit_c <- c(94, 132, 59, 158)
+
+# The anonymous function approach
+map_dbl(visit_a, function(x) {
+  x * 24
+})
+
+# The mapper approach
+map_dbl(visit_a, ~ .x * 24)
+
+# Now, we could have defined the mapper ahead of time.
+to_day <- as_mapper(~ .x * 24)
+
+# and use it in our map calls.
+map_dbl(visit_b, to_day)
+
+# setting the name of your objects
+set_names()
+
+visits_1 <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+visits_2 <- c(2, 4, 6, 8, 10, 12, 14, 16, 18, 20,22, 24)
+
+month.abb # just in base R?
+
+all_visits <- list(visits_1, visits_2)
+
+str(all_visits)
+
+all_visits_named <- map(all_visits, ~ set_names(.x, month.abb))
+
+names(all_visits_named) # not sure why this shows NULL
+
+# keep - extract elements that satisfy a condition
+
+# let's first create a mapper that tests if .x is more than 8
+is_more_eight <- as_mapper(~ .x > 8)
+
+# use the mapper to run the query on the list, using keep()
+map(all_visits_named, ~ keep(.x, is_more_eight)) # notice how useful it was to have named elements here. 
+
+# Split up with keep() and discard()
+# Here's a rule for coding: write code so that if you need to change one thing, you will have to change it just once.
+
+group_over <- map(all_visits_named, ~ keep(.x, is_more_eight)) # all elements over 8. 
+group_under <- map(all_visits_named, ~discard(.x, is_more_eight)) # all elements under 8.
+# essentially discard is like "don't keep" elements that meet this critera. Can easily use the two in tandem. 
+
+# Predicates -> a function that returns either TRUE or FALSE
+# Predicate functional -> takes a vector and a predicate function and does something useful
+
+# Let's define a threshold
+threshold <- 8
+# now write the mapper
+over_threshold <- as_mapper(~ .x > threshold)
+# now let's find out if every element is over the threshold
+map(all_visits_named, ~ every(.x, over_threshold))
+# now let's find out if any element is over the threshold
+map(all_visits_named, ~ some(.x, over_threshold))
+
+```
+
+# Chapter 2: Functional programming - from theory to practice
+
+```{r}
+
+# Tools for functional programming with purrr
+
+# High order functions -> manipulate other functions
+
+safely()
+possibly()
+
+urls <- c("https://thinkr.fr", "http://not_working.org", "http://cran.r-project.org")
+
+# Create a safe version of read_lines() from readr
+safe_read <- safely(read_lines)
+
+# Map it on to the urls vector
+res <- map(urls, safe_read)
+
+named_res <- set_names(res, urls)
+
+# Extract only the error portion
+map(named_res, "error")
+
+# Now, what if we coded a function that would read in safe_read() and then discard the error portion?
+safe_read_discard <- function(url) {
+  safe_read(url) %>%
+    discard(is.null)
+}
+
+res <- map(urls, safe_read_discard)
+map(res, "error")
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
