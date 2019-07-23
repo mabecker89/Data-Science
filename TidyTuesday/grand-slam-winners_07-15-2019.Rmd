@@ -15,7 +15,8 @@ player_dob <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience
 
 grand_slams <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-04-09/grand_slams.csv") %>%
   arrange(year, grand_slam, name, gender) %>%
-  distinct(year, grand_slam, name, .keep_all = TRUE)
+  distinct(year, grand_slam, name, .keep_all = TRUE) %>%
+  mutate(grand_slam = str_replace(str_to_title(str_replace(grand_slam, "_", " ")), "Us", "US")) 
 
 grand_slam_timeline <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-04-09/grand_slam_timeline.csv")
 
@@ -73,6 +74,49 @@ grand_slams_age %>%
 
 ```
 
+## Predicting a winner of a Grand Slam tournament 
+
+
+```{r}
+
+tournaments <- grand_slams %>%
+  select(year, tournament = grand_slam, gender, tournament_date)
+
+timeline_processed <- grand_slam_timeline %>%
+  inner_join(tournaments, by = c("year", "tournament", "gender")) %>%
+  arrange(player, tournament_date) %>%
+  filter(outcome != "Absent",
+         !str_detect(outcome, "Qualif")) %>%
+  group_by(player) %>%
+  mutate(rolling_play_count = row_number(),
+         rolling_won_count = lag(cumsum(outcome == "Won"), default = 0),
+         rolling_finals_count = cumsum(outcome %in% c("Won", "Finalist"))) %>%
+  ungroup() %>%
+  filter(!(year == "1977" & tournament == "Australian Open")) %>%
+  mutate(won = outcome == "Won") # sets up a logical column. handy for modeling later. 
+
+timeline_processed %>%
+  filter(outcome %in% c("Won", "Finalist")) %>%
+  arrange(tournament_date) %>%
+  group_by(rolling_won_count = pmin(rolling_won_count, 10)) %>%
+  summarize(pct_won = mean(won),
+            observations = n()) %>%
+  ggplot(aes(x = rolling_won_count, y = pct_won)) +
+  geom_line() +
+  expand_limits(y = 0)
+
+timeline_processed %>%
+  filter(outcome %in% c("Finalist", "Won")) %>%
+  select(year, tournament, gender, outcome, rolling_won_count) %>%
+  spread(outcome, rolling_won_count)
+
+
+
+
+
+
+
+```
 
 
 
