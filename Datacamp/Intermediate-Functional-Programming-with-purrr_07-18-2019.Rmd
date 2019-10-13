@@ -132,11 +132,83 @@ safe_read_discard <- function(url) {
 res <- map(urls, safe_read_discard)
 map(res, "error")
 
+compact() # removes NULL elements
 
+GET() # from httr - working with web data
 
 ```
 
+# Chaper 3: Better code with purrr
 
+```{r}
+
+# Why cleaner code?
+
+compose() # an adverb - stick two functions together!
+# compose() reads right to left (like nested base R)
+
+#e.g.
+rounded_mean <- compose(round, mean)
+rounded_mean(1:200)
+
+negate() # inverts a predicate
+
+#e.g
+`%not_in%` <- negate(`%in%`)
+
+# Prefilling functions
+
+partial() # use partial() to specify a few parameters e.g. with compose
+
+rounded_mean <- compose(
+  partial(round, digits = 2),
+  partial(mean, na.rm = TRUE)
+)
+
+rounded_mean(c(1.12, 2.24, 3.36, 4.48, 5.60, NA)) 
+
+# List columns - why? i.e. nested dataframe. Specific to the tibble class.  
+
+nest()
+unnest()
+
+# Can create a nested dataframe from a standard dataframe
+iris_nest <- iris %>%
+  group_by(Species) %>% # need group_by first
+  nest()
+
+iris_nest # -> can now use purrr on this!!
+
+iris_nest %>% mutate(lm = map(data, ~ lm(Sepal.Length ~ Sepal.Width, data = .x))) 
+# Everything stays in the dataframe
+
+# another e.g. 
+summary_lm <- compose(summary, lm)
+
+iris %>%
+  group_by(Species) %>%
+  nest() %>%
+  mutate(data = map(data, ~ summary_lm(Sepal.Length ~ Sepal.Width, data = .x)),
+         data = map(data, "r.squared")) %>%
+  unnest()
+
+# nest is useful when outputs may have different lengths (ie can be stored easily in a list column)
+
+```
+
+# Chapter 4: Case Study
+
+```{r}
+
+# Most web APIs returns JSON - Javascript Open Notation
+
+# R reads JSON as a nested list.
+
+map_at() # return a function pointed at a specific element in the list - use .at = argument.
+
+
+
+```
 
 
 

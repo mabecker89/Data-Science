@@ -1,0 +1,222 @@
+---
+title: "Machine Learning Toolbox"
+author: "Marcus Becker"
+date: "August 5, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Chapter 1: Regression Models: Fitting Them and Evaluating Their Performance
+
+```{r}
+
+# caret package
+
+library(caret)
+library(tidyverse)
+
+# Supervised Learning - Machine Learning with a target variable (something you want to predict)
+
+# two types: classification (qualitative) and regression (quantitative)
+# use metrics to evaluate models - e.g. root mean squared error (RMSE)
+# it is common to calculate RMSE in-sample - leads to too-optimistic projections of model performance.
+# also known as over-fitting. 
+# Better to calculate out-of-sample error
+
+# Fit a linear model on the diamonds dataset predicting price ~ all other variables. 
+data(diamonds)
+
+model <- lm(price ~ ., data = diamonds)
+predictions <- predict(model, newdata = diamonds) # in-sample predictions
+error <- predictions - diamonds$price
+sqrt(mean(error^2)) # manually calculate root mean squared error. 
+
+# Testing out-of-sample error - we want models that don't overfit and generalize well.
+# Do the models perform well on new data?
+# test set vs training set. 
+
+# First, randomly order your dataset.
+set.seed(42) # for reproducibility 
+rows <- sample(nrow(diamonds))
+shuffled_diamonds <- diamonds[rows,]
+# Now we can split the data into training vs. test; let's say ... 80/20.
+split <- round(nrow(shuffled_diamonds) * 0.8) # this is where to split.
+train <- shuffled_diamonds[1:split,]
+test <- shuffled_diamonds[(split+1):nrow(shuffled_diamonds), ]
+# Create model
+model <- lm(price ~ ., data = train) 
+predictions <- predict(model, newdata = test)
+# How did it do?
+error <- predictions - test$price # different between the predictions and the actual price
+sqrt(mean(error^2))
+
+# ^ The above process is good, but risks outliers really affecting RMSE if they were part of train/test.
+# Cross-validation is the answer. Split data into 'folds', or different test sets. 
+# bootstrapping is similiar. 
+# caret supports many types of cross-validation, and you can specify which type of cross-validation and the number of folds with the trainControl() function.
+
+# 10-fold cross-validation
+
+model <- train(
+  price ~ .,
+  data = diamonds,
+  method = "lm",
+  trControl = trainControl(
+    method = "cv",
+    number = 10,
+    verboseIter = TRUE
+  )
+)
+
+print(model)
+
+```
+
+
+# Chapter 2: Classification Models: Fitting Them and Evaluating Their Performance
+
+Classification models involve a categorical (qualitative) target variable. 
+
+```{r}
+
+library(mlbench)
+
+# Use Sonar dataset. 
+data(Sonar)
+
+# Randomly order the dataset.
+rows <- sample(nrow(Sonar)) # get a random permutation of the row indices in a dataset.
+Sonar <- Sonar[rows, ] # use this permutation to randomly reorder the dataset. 
+
+# Find row to split on.
+split <- round(nrow(Sonar) * 0.60) # We'll use a 60/40 train/test split this time.
+train <- Sonar[1:split, ]
+test <- Sonar[(split + 1):nrow(Sonar), ]
+
+# Confirm test set size
+nrow(train) / nrow(Sonar)
+
+```
+
+Fitting a logistic regression model.
+
+```{r}
+
+# Using glm() - allows for more varied types of regression models.
+
+model <- glm(Class ~., family = 'binomial', data = train) # don't worry about warnings.
+
+p <- predict(model, newdata = test, type = "response")
+
+```
+
+Confusion matrix
+
++ True positives
++ False positives
++ False negatives
++ True negatives
+
+All important for evaluating a model's accuracy 
+
+```{r}
+
+# Create binary vector using a simple 0.5 (50%) threshold from the model results.
+m_or_r <- ifelse(p > 0.5, "M", "R")
+
+# Make it into a factor.
+p_class <- factor(m_or_r, levels = levels(test[["Class"]]))
+
+# Use the confusionMatrix() from caret
+confusionMatrix(p_class, test$Class)
+
+```
+
+ROC Curves
+
+The challenge: many possible thresholds. Requires manual work to choose .
+
+We need a more systematic approach to evaluating classification thresholds. ROC curves are a really useful shortcut for summarizing the performance of a classifier over all possible thresholds. 
+
+```{r}
+
+library(caTools)
+
+colAUC(p, test$Class, plotROC = TRUE)
+
+# Y-axis is the true positive rate. X-axis is the false positive rate. 
+
+
+```
+
+Area Under the Curve (AUC)
+
+Random model - 0.5. Perfect model (no false positives) - 1.0
+
+AUC is a single number summary of model accuracy. Summarizes model performance across all thresholds. Can be used to rank different models within same dataset.
+
+```{r}
+
+# Use the trainControl() function from caret to create a custom trainControl object. 
+
+myControl <- trainControl(
+  method = "cv",
+  number = 10, # number of cross-fold validations
+  summaryFunction = twoClassSummary,
+  classProbs = TRUE, # Important!
+  verboseIter = TRUE
+)
+
+# Pass myControl to train()
+model <- train(
+  Class ~ .,
+  data = Sonar,
+  method = "glm",
+  trControl = myControl
+)
+
+```
+
+# Chapter 3: Tuning model parameters to improve performance
+
+Random forests and wine
+
+- Hyperparameters. 
+- Fitting many decision trees - bootstrap aggregation, or bagging.
+- Much more flexible than linear models, and can model complicated nonlinear effects as well as automatically capture interactions between variables. 
+- Set the method function in train() to be "ranger", which uses the `ranger` package. 
+
+RF models have a primary tuning parameter of `mtry`, which controls how many variables are exposed to the splitting search routine at each split. I think the `tuneLength` argument controls this?
+
+
+```{r}
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
