@@ -19,3 +19,4 @@ Chapter 3 - April 1 - April 7, 2019
 Writing Functions in R, instructed by Hadley and Charlotte Wickham 
 
 *Completed: July 13, 2018*
+adding a line
