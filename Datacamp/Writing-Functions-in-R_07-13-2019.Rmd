@@ -103,7 +103,7 @@ df <- data.frame(
   d = rnorm(10)
 )
 
-for (i in 1:ncol(df)) { # the sequence - 'i' is the name given to the object that indexes the iteration; the length of the values                              that i should iterate over
+for (i in 1:ncol(df)) { # the sequence - 'i' is the name given to the object that indexes the iteration; the length of the values that i should iterate over
   print(median(df[[i]])) # body - describes the actions.
 }
 

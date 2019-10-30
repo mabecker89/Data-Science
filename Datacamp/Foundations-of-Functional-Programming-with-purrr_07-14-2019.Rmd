@@ -82,6 +82,7 @@ map(wesanderson, length) # is equivalent to ...
 map(wesanderson, ~ length(.x)) # OK. But this notation is convenient for ...
 map_dbl(wesanderson, ~ length(.x))
 map_dfr(wesanderson, ~length(.x))
+
 object3 <- data.frame(numcolors = map_dbl(wesanderson, ~ length(.x))) %>%
   rownames_to_column(var = "Movie") # cool. 
 
@@ -105,7 +106,7 @@ names(sw_films_named)
 
 sites <- list("north", "east", "west")
 
-list_of_df <- map(si  tes,
+list_of_df <- map(sites,
                   ~ data.frame(sites = .x,
                                a = rnorm(mean = 5, n = 200, sd = (5/2)),
                                b = rnorm(mean = 200, n = 200, sd = 15)))
@@ -123,7 +124,6 @@ list_of_df %>%
 map(sw_films, ~ .x[["director"]]) # gives list
 map_chr(sw_films, ~.x[["director"]]) # gives character vector
 
-<<<<<<< HEAD
 map(sw_films, ~.x[["episode_id"]])
 map_dbl(sw_films, ~.x[["episode_id"]])
 

@@ -176,7 +176,7 @@ gap_fullmodels_perf %>%
 
 ```
 
-Chapter 3: Build, Tune, and Evaluate the Performanc of Regression Models
+# Chapter 3: Build, Tune, and Evaluate the Performanc of Regression Models
 
 How well would our model perform on new data? 
 
@@ -342,9 +342,74 @@ mae(test_actual, test_predicted)
 
 ```
 
+# Chapter 4: Build, Tune, and Evaluate Classification Models
 
+Logistic regression models
 
+```{r}
 
+data("attrition")
+
+# Prepare the initial split object.
+data_split <- initial_split(attrition, prop = 0.75)
+
+# Extract the training dataframe.
+training_data <- training(data_split)
+# Extract the testing dataframe.
+testing_data <- testing(data_split)
+
+set.seed(42)
+
+# Build dataframe for 5-fold cross validation - vfold_cv() randomly splits the data into V groups of roughly equal size ("folds")
+cv_split <- vfold_cv(training_data, v = 5)
+
+# Create train and validate sets
+cv_data <- cv_split %>%
+  mutate(train = map(.x = splits, .f = ~ training(.x)),
+         validate = map(.x = splits, .f = ~ testing(.x)))
+
+# Now, build a logistic regression model using the train data for each fold of the cross validation.
+cv_models_lr <- cv_data %>%
+  mutate(model = map(.x = train, .f = ~ glm(formula = Attrition ~ ., data = .x, family = "binomial")))
+
+```
+
+Evaluating classification models:
+
+Ingredients:
+1) Actual attrition classes
+2) Predicted classes
+3) Comparison metric -> accuracy, precision, recall
+  + The type of metric you choose should be informed by the application of your model. 
+
+Actual and predicted vectors must be converned to binary values:
+
+```{r}
+
+# Extract the first model and validate columns:
+model <- cv_models_lr$model[[1]]
+validate <- cv_models_lr$validate[[1]]
+
+# Prepare binary vector of actual Attrition values in validate:
+validate_actual <- validate$Attrition == "Yes" # Apparently this is a way to go from Yes/No to TRUE/FALSE
+
+# Predict the probabilities for the observations in validate
+validate_prob <- predict(model, newdata = validate, type = "response")
+
+# Prepare binary vector of predicted Attrition values for validate using 0.5 as cutoff
+validate_predicted <- validate_prob > 0.5
+
+# Compare using a table
+table(validate_actual, validate_predicted)
+
+# Calculate accuracy
+accuracy(validate_actual, validate_predicted) # Looks at both TRUEs and FALSEs
+# Precision
+precision(validate_actual, validate_predicted)
+# Recall
+recall(validate_actual, validate_predicted)
+
+```
 
 
 
