@@ -1,0 +1,384 @@
+---
+title: 'Supervised Learning: Classification'
+author: "Marcus Becker"
+date: "November 5, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(class)
+library(naivebayes)
+
+```
+
+# Chapter 1: k-Nearest Neighbours (kNN)
+
+- subdomain called supervised learning -> training via a set of examples. 
+
+Feature space.
+Euclidian distance formula - distance between points. 
+kNN - uses principle of nearest neighbours. 
+
+The signs dataset before includes variables of the color of different pixels in a picture of an observed street sign.
+
+```{r}
+
+# Traffic sign data
+signs <- read_csv("https://assets.datacamp.com/production/repositories/718/datasets/c274ea22cc3d7e12d7bb9fdc9c2bdabe9ab025f4/knn_traffic_signs.csv")
+
+# Create a vector of labels:
+sign_type <- signs$sign_type
+
+# The next sign to classify:
+next_sign <- signs[206,] %>% select(r1:b16)
+
+# Classify this sign using kNN:
+knn(train = signs[,c(-1,-2,-3)], test = next_sign, cl = sign_type)
+
+# Now, we'll classify a collection of signs. This will be our test signs.
+test_signs <- filter(signs, sample == "test") %>% select(-c(id, sample))
+train_signs <- filter(signs, sample == "train") %>% select(-c(id, sample))
+sign_type <- train_signs$sign_type
+# Now predict using kNN
+signs_pred <- knn(train = train_signs[-1], test = test_signs[-1], cl = sign_type)
+# To evaluate performance, we first extract the actual labels from test:
+signs_actual <- test_signs$sign_type
+# Pass the vector of predictions and the vector of actual signs to table() to cross-tabulate:
+table(signs_pred, signs_actual)
+# Compute accuracy using mean() functions:
+mean(signs_pred == signs_actual)
+
+```
+
+What about the 'k' in kNN? 
+
+- Choosing 'k' neighbours -> i.e. deciding the size of the neighbourhood to look at for similarities.
+- Default is 1.
+- Setting a `k` parameter allows the algorithm to consider additional nearby neighbours. This enlarges the collection of neighbours which will vote on the predicted class.
+
+```{r}
+
+# Trying out different k values:
+signs_pred_k7 <- knn(train = train_signs[-1], test = test_signs[-1], cl = sign_type, k = 7)
+
+signs_pred_k15 <- knn(train = train_signs[-1], test = test_signs[-1], cl = sign_type, k = 15)
+
+mean(signs_pred_k7 == signs_actual) # Slightly better than using k = 1.
+mean(signs_pred_k15 == signs_actual) # Worse. 
+
+# But how did the neighbours 'vote'? Was it unanimous, or widely separated? Let's obtain the voting results.
+signs_pred_k7 <- knn(train = train_signs[-1], test = test_signs[-1], cl = sign_type, k = 7, prob = TRUE)
+
+# Retrieve probabilities using the attr() function:
+signs_prob <- attr(signs_pred_k7, "prob")
+
+head(signs_pred_k7)
+
+head(signs_prob)
+
+```
+
+Before applying kNN to a classification task, it is common practice to rescale the data using a technique like min-max normalization. 
+
++ Helps ensure all data elements may contribute equal shares to distance
++ Reduces influence of extreme values.
+
+kNN also assumes numeric data -> so use dummy variable coding.
+
+```{r}
+
+# normalization function (rescale data to a given range): here, this function rescales values to min 0 max 1.
+
+normalize <- function(x) {
+  return((x - min(x)) / (max(x) - min(x)))
+}
+
+normalized_r1 <- normalize(signs$r1)
+
+```
+
+# Chapter 2: Naive Bayes
+
+Conditional probabilities
+
+```{r}
+
+bretts_locations <- read_csv("https://assets.datacamp.com/production/repositories/718/datasets/571628c39048df59c40c9dcfba146a2cf7a4a0e3/locations.csv")
+
+where9am <- bretts_locations %>%
+  filter(hour == 9 & hourtype == "morning") %>%
+  select(daytype, location)
+
+# Find the probability that Brett is in the office.
+p_A <- nrow(subset(where9am, location == "office")) / nrow(where9am)
+
+# Find the probability of it being a weekday.
+p_B <- nrow(subset(where9am, daytype == "weekday")) / nrow(where9am)
+
+# Find the probability of it being a weekday AND Brett is in the office
+p_AB <- nrow(subset(where9am, location == "office" & daytype == "weekday")) / nrow(where9am)
+
+# Find the probability that Brett is in the office GIVEN that it is a weekday
+p_A_given_B <- nrow(subset(where9am, location == "office" & daytype == "weekday")) / nrow(subset(where9am, daytype == "weekday"))
+
+```
+
+Let's build a model!
+
+```{r}
+
+locmodel <- naive_bayes(location ~ daytype, data = where9am)
+
+```
+
+# Chapter 3: Logistic Regression
+
+Logistic regression involves fitting a curve to numeric data to make predictions about binary events.
+
+We use a logistic function - an S-shaped curved - so that predictions can't be less than 0 or more than 1 (just like a probability).
+
+```{r}
+
+library(tidyverse)
+library(pROC)
+
+# Fundraising data set. 
+donors <- read_csv("https://assets.datacamp.com/production/repositories/718/datasets/9055dac929e4515286728a2a5dae9f25f0e4eff6/donors.csv")
+
+str(donors)
+table(donors$donated)
+
+# Fit a logistic regression model:
+donation_model <- glm(data = donors, 
+                      formula = donated ~ bad_address + interest_religion + interest_veterans,
+                      family = "binomial")
+
+summary(donation_model)
+
+# Using predict() - by default is in log-odds - unless type = "response" is specified. Converts log-odds to probabilities.
+donors$donation_prob <- predict(donation_model, type = "response")
+
+# Find the donation probability of the average prospect in the dataset
+mean(donors$donated)
+
+# Predict a donation if probability of donation is greater than average
+donors$predicted <- ifelse(donors$onation_prob > mean(donors$donated), 1, 0)
+
+# Calculate the model's accuracy
+mean(donors$donated == donors$predicted)
+
+```
+
+Accuracy can be misleading, especially for imbalanced datasets.
+
+What classification threshold should we choose? 0.5? Or one of many others.
+Solution: let the computer calculate/plot the true/false positive rate at every possible threshold. 
+
+Let's try a ROC curve. 
+
+```{r}
+
+# Create ROC curve - actual, predicted
+ROC <- roc(donors$donated, donors$donation_prob)
+
+plot(ROC, col = "blue")
+
+auc(ROC)
+
+```
+
+Dummy variables, missing data, and interactions.
+
+- Dummy variables for categorical variables. 
+- Imputing missing data with a guess about what the value will be.
+- Interaction effect - two predictors, when combined, will have a different impact than the sum of their individual impacts combined. 
+
+```{r}
+
+# So wealth_rating is coded as numeric. However, it should be factor.
+summary(glm(data = donors, formula = donated ~ wealth_rating, family = "binomial"))
+
+# Recode:
+donors$wealth_rating <- factor(donors$wealth_rating, 
+                               levels = c(0,1,2,3), 
+                               labels = c("Unknown", "Low", "Medium", "High"))
+
+# Relevel using Medium as the reference category:
+donors$wealth_rating <- relevel(donors$wealth_rating, ref = "Medium")
+
+# Try the modeling again:
+summary(glm(data = donors, formula = donated ~ wealth_rating, family = "binomial"))
+
+# Missing data - the model will leave out observations with missing variables in any of the predictors.
+# In this case, some prospective donors have missing age data.
+
+summary(donors$age) # removes NA's.
+# Impute age (just using the mean)
+donors$imputed_age <- ifelse(is.na(donors$age), round(mean(donors$age, na.rm = TRUE), digits = 2), donors$age)
+# And also created another variable to indicate whether it was missing.
+donors$missing_age <- ifelse(is.na(donors$age), 1, 0)
+
+# Interactions
+rfm_model <- glm(data = donors, formula = donated ~ money + recency*frequency, family = "binomial")
+
+summary(rfm_model)
+
+rfm_prob <- predict(rfm_model, type = "response")
+
+ROC <- roc(donors$donated, rfm_prob)
+
+plot(ROC, col = "red")
+
+auc(ROC)
+
+```
+
+Automatic feature selection
+
+Stepwise regression
+- backward deletion
+- forward selection
+
+```{r}
+
+# Build null model first
+null_model <- glm(data = donors, formula = donated ~ 1, family = "binomial")
+# Specify full model using all of the potential predictors
+full_model <- glm(data = donors, formula = donated ~ ., family = "binomial")
+
+# Use a forward stepwise algorithm to build a model:
+step_model <- step(null_model, scope = list(lower = null_model, upper = full_model), direction = "forward")
+
+```
+
+# Chapter 4: Classification Trees
+
+Making decisions with trees
+- root nodes
+- branch nodes
+- leaf nodes (terminal nodes)
+
+Divide and conquer! i.e. recursive partitioning. 
+
+```{r}
+
+library(rpart)
+library(rpart.plot)
+
+loans <- read_csv("https://assets.datacamp.com/production/repositories/718/datasets/7805fceacfb205470c0e8800d4ffc37c6944b30c/loans.csv") %>%
+  filter(keep == "1") %>%
+  mutate(outcome = factor(default, levels = c(1, 0), labels = c("default", "repaid"))) %>%
+  mutate_if(is.character, as.factor) %>%
+  select(-c(keep, rand, default))
+
+# Build a lending model predicting loan outcome versus loan amount and credit score
+loan_model <- rpart(data = loans, formula = outcome ~ loan_amount + credit_score, 
+                    method = "class", control = rpart.control(cp = 0))
+
+summary(loan_model)
+
+rpart.plot(loan_model)
+
+# A few adjustments:
+rpart.plot(loan_model, type = 3, box.palette = c("red", "green"), fallen.leaves = TRUE)
+
+```
+
+Growing larger trees
+
+- the split that produces the most pure partitions will be used first.
+- axis-parallel splits
+
+Overfitting is a problem - modeling the noise.
+
+Solutions:
+- Pre-pruning. 
+  + Maximum depth
+  + Minimum of observations to split
+- Post-pruning
+  + Looking for branches that don't provide a lot of information
+  
+```{r}
+
+# Let's do some predictions first.
+
+# Train/test split
+# 1. Take a sample of rows
+rows <- sample(nrow(loans))
+shuffled_loans <- loans[rows,]
+# Now split 75/25
+split_at <- round(nrow(loans) * 0.75)
+loans_train <- shuffled_loans[1:split_at, ]
+loans_test <- shuffled_loans[(split_at + 1):nrow(shuffled_loans), ]
+
+# Build model using training data
+loan_model <- rpart(data = loans_train, 
+                    formula = outcome ~ ., 
+                    method = "class", 
+                    control = rpart.control(cp = 0))
+
+# Make predictions
+loans_test$pred <- predict(loan_model, loans_test, type = "class")
+
+# Examine the confusion matrix
+table(loans_test$outcome, loans_test$pred)
+
+# Compute accuracy
+mean(loans_test$outcome == loans_test$pred) # Not great.
+
+# Let's try some pre-pruning methods to prevent overgrown trees.
+loan_model_pruned <- rpart(data = loans_train,
+                           formula = outcome ~.,
+                           method = "class",
+                           control = rpart.control(cp = 0, minsplit = 500)) # or use the maxdepth argument.
+
+loans_test$pred <- predict(loan_model_pruned, loans_test, type = "class")
+
+mean(loans_test$outcome == loans_test$pred)
+
+# Now some post pruning:
+# Let's fit a complexity plot to the overly complex tree (loan_model)
+plotcp(loan_model)
+
+# Prune the tree
+loan_model_postprune <- prune(loan_model, cp = 0.0014)
+
+# Compute new accuracy
+loans_test$pred_prune <- predict(loan_model_postprune, loans_test, type = "class")
+
+mean(loans_test$pred_prune == loans_test$outcome)
+
+```
+
+Seeing the forest from the trees.
+
+Making decisions as an ensemble!
+- Groups of classification trees can be combined into an ensemble that generates a single prediction by allowing the trees to "vote" on the outcome.
+
+```{r}
+
+library(randomForest)
+
+loan_model_rf <- randomForest(formula = outcome ~ ., data = loans_train)
+
+loans_test$pred_for <- predict(loan_model_rf, loans_test, type = "class")
+
+mean(loans_test$pred_for == loans_test$outcome)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+

@@ -31,7 +31,9 @@ library(tidyverse)
 data(diamonds)
 
 model <- lm(price ~ ., data = diamonds)
-predictions <- predict(model, newdata = diamonds) # in-sample predictions
+
+predictions <- predict(model, newdata = diamonds)# in-sample predictions
+
 error <- predictions - diamonds$price
 sqrt(mean(error^2)) # manually calculate root mean squared error. 
 
@@ -75,7 +77,6 @@ model <- train(
 print(model)
 
 ```
-
 
 # Chapter 2: Classification Models: Fitting Them and Evaluating Their Performance
 
@@ -191,6 +192,16 @@ Random forests and wine
 - Set the method function in train() to be "ranger", which uses the `ranger` package. 
 
 RF models have a primary tuning parameter of `mtry`, which controls how many variables are exposed to the splitting search routine at each split. I think the `tuneLength` argument controls this?
+
+Introducing glmnet
+
+- Extension of glm models with built-in variable selection.
+- Helps deal with collinearity and small sample sizes.
+- Two primary forms:
+  + Lasso regression - penalizes number of non-zero coefficients.
+  + Ridge regression - penalizes absolute magnitude of coefficients.
+  + Attempts to find a parsimonious (i.e. simple) model
+  + Pairs well with random forest models.
 
 
 ```{r}

@@ -1,0 +1,105 @@
+---
+title: "NHL Game Predictions"
+author: "Marcus Becker"
+date: "October 13, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+# Load packages
+library(tidyverse)
+library(broom)
+library(ranger)
+library(mgcv)
+library(rsample)
+library(here)
+library(fs)
+library(lubridate)
+
+# Import data
+
+paths <- dir_ls(here("./data/base"), glab = "*.csv")
+
+names <- c("reg_1516_es",
+           "reg_1617_es",
+           "reg_1718_es",
+           "reg_1819_es")
+
+ls_raw <- map(paths, read_csv) %>%
+  set_names(names)
+
+```
+
+We begin with the following data:
+
++ NHL regular-season games for four seasons: 2015-16 through 2018-19. 
++ All data is even-strength, non-score and venue adjusted. 
+  - So this includes 5v5, 4v4, and 3v3 play.
+
+Our goal is to build a model capable of predicting future NHL games.
+
+Here are some ideas for predictors:
+
++ Pts percentage (of both teams)
++ Home vs. Away game
++ Scheduling
++ Advanced metrics like CF, FF, xGF, etc. 
+  - Probably want to build in here some variables that capture how well a team has been playing recently.
++ Injuries? Pct of team cap that is playing in the game. 
+  - Data source: capgeek.
++ Special teams
+  - PP/PK ... maybe factor in a recency thing as well.
+  
+Other considerations on how to build this ..
+
+How about constructing a lookup table for each teams performance, by date.
+
+Date | Team | metrics, etc. 
+
+Then build the train/test dataset off of that. 
+
+```{r}
+
+# Let's look at one team in 15-16 to start.
+
+oilers_1516 <- ls_raw[["reg_1516_es"]] %>%
+  filter(Team == "Edmonton Oilers") %>%
+  select(Game, Team, CF, CA, FF, FA, SF, SA, GF, GA, xGF, xGA, SCF, SCA,
+         HDCF, HDCA) %>%
+  # Create Date variable
+  mutate(Date = ymd(str_extract(Game, "^.{10}"))) %>%
+  separate(Game, into = c("date", "score"), sep = " - ", remove = FALSE) %>%
+  mutate(home = ifelse(str_detect(score, "^Oilers"), 0, 1)) %>%
+  mutate(score_numeric = str_match_all(score, "[0-9]+")) %>%
+  mutate(score_numeric = map(score_numeric, setNames, c("away_score", "home_score"))) %>%
+  unnest_wider(score_numeric)
+  
+  
+  #mutate(home_score = ifelse(home == "1", map_chr(score_numeric, 1), map_chr(score_numeric, 2)))
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

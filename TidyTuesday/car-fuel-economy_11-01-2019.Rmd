@@ -1,0 +1,63 @@
+---
+title: "Car Fuel Economy"
+author: "Marcus Becker"
+date: "November 1, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+
+# Load data
+big_epa_cars <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-10-15/big_epa_cars.csv")
+
+
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Big `mtcars`
+
+```{r}
+
+# Let's sort alphabetically
+big_epa_cars_alpha <- big_epa_cars %>%
+  select(sort(colnames(big_epa_cars)))
+
+```
+
+```{r}
+
+# Let's make a scatterplot between city mpg and highway mpg:
+
+big_epa_cars %>%
+  # Find out which cars use electicity
+  mutate(uses_electricity = ifelse(highwayE > 0, "Uses Electicity", "Doesn't Use Electricity")) %>%
+  ggplot(mapping = aes(x = highway08, y = city08, color = uses_electricity)) +
+    geom_point() +
+    # See where points fall along the 45 degree line.
+    geom_abline(color = "red") +
+    theme_light() +
+    facet_wrap(~ uses_electricity, scales = "free") +
+    expand_limits(x = 0, y = 0)
+
+```
+
+
+```{r}
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+

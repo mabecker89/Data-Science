@@ -386,6 +386,8 @@ Actual and predicted vectors must be converned to binary values:
 
 ```{r}
 
+# We'll start first with a single fold.
+
 # Extract the first model and validate columns:
 model <- cv_models_lr$model[[1]]
 validate <- cv_models_lr$validate[[1]]
@@ -411,6 +413,100 @@ recall(validate_actual, validate_predicted)
 
 ```
 
+Now that we've done it for a single fold, let's expand it to all folds in the cross-validation dataframe.
+
+```{r}
+
+cv_prep_lr <- cv_models_lr %>%
+  mutate(
+    # Prepare binary vector of actual Attrition values
+    validate_actual = map(.x = validate, .f = ~ .x$Attrition == "Yes"),
+    # Prepare binary vector of predicted Attrition values for validate
+    validate_predicted = map2(.x = model, .y = validate, .f = ~ predict(.x, .y, type = "response") > 0.5)
+  )
+
+```
+
+Calculate cross-validated performance.
+
+Now let's say we want to evaluate the performance of our models. We'll use 'recall' here, because we're interested in identifying ready-to-leave employees, and want to identify as many of them as possible. 
+
+```{r}
+
+cv_perf_recall <- cv_prep_lr %>%
+  mutate(validate_recall = map2_dbl(.x = validate_actual, .y = validate_predicted,
+                                     .f = ~ recall(actual = .x, predicted = .y)))
+
+mean(cv_perf_recall$validate_recall)
+
+```
+
+Now, can we improve on this performance?
+
+Classification with Random Forests!!
+
+```{r}
+
+library(ranger)
+
+# Use crossing() to expand the CV data for different values of mtry
+# Note that mtry can be quite a bit higher in this case, since there are 30 predictors.
+cv_tune <- cv_data %>%
+  crossing(mtry = c(2, 4, 8, 16))
+
+# Build a CV model for each fold and mtry combination:
+cv_models_rf <- cv_tune %>%
+  mutate(
+    # Create models
+    model = map2(.x = train, .y = mtry, .f = ~ ranger(formula = Attrition ~ .,
+                                                       data = .x,
+                                                       mtry = .y,
+                                                       num.trees = 100,
+                                                       seed = 42)),
+    # Prepare actual values from validate
+    validate_actual = map(.x = validate, .f = ~ .x$Attrition == "Yes"),
+    # Prepare binary vector of predicted Attrition values for validate
+    validate_predicted = map2(.x = model, .y = validate, 
+                              .f = ~ predict(.x, .y, type = "response")$predictions == "Yes"),
+    # Calculate the validate recall for each CV fold
+    recall = map2_dbl(.x = validate_actual, .y = validate_predicted,
+                      .f = ~ recall(actual = .x, predicted = .y))
+    
+  )
+
+cv_models_rf %>%
+  group_by(mtry) %>%
+  summarise(mean_recall = mean(recall))
+
+# Seems like the rf models were unable to improve upon the logistic regression model.
+
+
+```
+
+Build a final classification model:
+
+Use ALL of the train data (no folds) and predict on the test data.
+
+```{r}
+
+best_model <- glm(formula = Attrition ~ ., data = training_data, family = "binomial")
+
+test_actual <- testing_data$Attrition == "Yes"
+
+test_predicted <- predict(best_model, testing_data, type = "response") > 0.5
+
+# Evaluate performance
+table(test_actual, test_predicted)
+
+accuracy(test_actual, test_predicted)
+
+precision(test_actual, test_predicted)
+
+recall(test_actual, test_predicted)
+
+# We have a model that we can expect will identify 49% of employees that are at risk to leave the organization. 
+
+```
 
 
 
