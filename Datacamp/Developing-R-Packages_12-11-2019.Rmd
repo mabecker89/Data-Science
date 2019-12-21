@@ -1,0 +1,139 @@
+---
+title: "Developing R Packages"
+author: "Marcus Becker"
+date: "December 11, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+library(here)
+
+```
+
+# Chapter 1: The R Package Structure
+
+An R Packages can include:
++ Functions
++ Data
++ Documentation
++ Vignettes
++ Tests
+
+What must be included?
+
++ R directory
++ man directory -> for documentation. 
++ NAMESPACE file
++ DESCRIPTION file
+
+Packages for easily creating packages!
+
++ devtools
+  - You can use devtools to create the basic structure of an R package by using the create() function.
++ roxygen2 
+
+
+```{r}
+
+library(devtools)
+
+# Use the create() function to create a new R package called datasummary
+create("C:/Users/mabec/Documents/R/datasummary")
+
+dir("C:/Users/mabec/Documents/R/datasummary")
+
+```
+
+Now, let's create a function for our package. This goes in the R folder. Note that you can't have subdirectories in this folder.
+
+Other tips:
+- Don't have everything in one script.
+- Don't have a large number of small files.
+- Group similar functions together.
+
+```{r}
+
+# Create numeric_summary() function
+numeric_summary <- function(x, na.rm) {
+
+  # Include an error if x is not numeric
+  if(!is.numeric(x)){
+    stop("Data must be numeric")
+  }
+
+  # Create data frame
+  else(data.frame(min = min(x, na.rm = na.rm),
+                  median = median(x, na.rm = na.rm),
+                  sd = sd(x, na.rm = na.rm),
+                  max = max(x, na.rm = na.rm)))
+}
+
+# Then we dump it into the R folder
+dump("numeric_summary", file = "C:/Users/mabec/Documents/R/datasummary/R/numeric_summary.R")
+
+
+
+```
+
+The use_* functions:
+
+Beyond the required structure, you can include a number of additional directories containing elements such as vignettes (user guides), data, and unit tests. 
+
+```{r}
+
+# Include data
+weather <- data.frame(day = 1:7,
+                      Temp = sample(10:25, 7),
+                      Weather = sample(c("Snow", "Rain", "Sun"), 7, replace = TRUE))
+
+use_data(weather, pkg = "datasummary", overwrite = TRUE)
+
+# Include vignettes
+use_vignette("my_first_vignette", pkg = "simutils") # Rmd template
+
+```
+
+# Chapter 2: Documentation
+
+Introduction to roxygen2
+
+The `roxygen` headers are included in the same script as the function code. You can use roxygen comments (#') to identify a line as part of the roxygen header. 
+
+The first three lines of the header have special meaning, and don't require tags to identify them. (use roxygen comments tho, and have a blank line between them)
++ title
++ description
++ details
+
+Use the @param tag to document the arguments of your function.
+
+If you wish to use functions from other packages, you can use the @import in the roxygen header (or @importFrom to import a single function)
+
+How do we export functions?
+
+Exported functions:
+- Visible to the end user
+- key to package functionality
+
+Non-exported functions:
+- not visible to the end user
+- utility functions
+
+Use the @export tag in the roxygen header to indicate that the function should be exported.
+
+Examples are the way that your end users will learn how to work with your code.
+
+
+
+
+
+
+
+
+
+
+
+
+
