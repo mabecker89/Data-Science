@@ -1,0 +1,128 @@
+---
+title: "Horror Movies"
+author: "Marcus Becker"
+date: "December 23, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+
+horror_movies_raw <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-10-22/horror_movies.csv")
+
+
+# Cleaning
+
+horror_movies <- horror_movies_raw %>%
+  arrange(desc(review_rating)) %>%
+  # Extract function: from which column, name the new column, and a regrex. 
+  # This regrex says extract when 4 digits are enclosed in brackets. Convert = TRUE to go to numeric.
+  # Dollar means 'end at the string'.
+  extract(title, "year", "\\((\\d\\d\\d\\d)\\)$", remove = FALSE, convert = TRUE) %>%
+  # Parse number is extracting the numbers from a column.
+  mutate(budget = parse_number(budget)) %>%
+  separate(plot, c("director", "cast_sentence", "plot"), extra = "merge", sep = "\\. ", fill = "right") %>%
+  distinct(title, .keep_all = TRUE)
+
+```
+
+
+```{r}
+
+library(tidytext)
+
+horror_movies_unnested <- horror_movies %>%
+  unnest_tokens(word, plot) %>%
+  # anti_join is a filtering join; i.e. we want to get ride of words in stop_words.
+  anti_join(stop_words, by = "word") %>%
+  filter(!is.na(word))
+
+
+horror_movies_unnested %>%
+  filter(!is.na(review_rating)) %>%
+  group_by(word) %>%
+  summarize(movies = n(),
+            avg_rating = mean(review_rating)) %>%
+  arrange(desc(movies)) %>%
+  filter(movies >= 100) %>%
+  mutate(word = fct_reorder(word, avg_rating)) %>%
+  ggplot(aes(avg_rating, word)) +
+  geom_point()
+
+
+```
+
+# Lasso Regression for predicting movie rating based on words in plot.
+
+```{r}
+
+library(glmnet)
+library(Matrix)
+
+movie_word_matrix <- horror_movies_unnested %>%
+  filter(!is.na(review_rating)) %>%
+  add_count(word) %>%
+  # Set threshold - word has to appear a certain number of times in the dataset.
+  filter(n >= 20) %>%
+  count(title, word) %>%
+  cast_sparse(title, word, n)
+
+dim(movie_word_matrix)
+
+rating <- horror_movies$review_rating[match(rownames(movie_word_matrix), horror_movies$title)]
+
+# Gets us a coefficient for each word!
+lasso_model <- cv.glmnet(movie_word_matrix, rating)
+
+summary(lasso_model)
+
+# Let's tidy the model up a bit.
+library(broom)
+
+tidy(lasso_model$glmnet.fit) %>%
+  filter(term %in% c("friends", "college", "evel", "haunted", "mother")) %>%
+  ggplot(aes(x = lambda, y = estimate, color = term)) +
+  geom_line(size = 2) +
+  scale_x_log10() +
+  geom_hline(yintercept = 0, lty = 2)
+
+# Let's look at lambda. Lambda is a penaly parameter. How do we pick a lambda?
+plot(lasso_model) # We want to pick a lambda that minimizes our MSE
+
+lasso_model$lambda.min
+
+tidy(lasso_model$glmnet.fit) %>%
+  filter(lambda == lasso_model$lambda.min,
+         term != "(Intercept)") %>%
+  mutate(term = fct_reorder(term, estimate),
+         direction = ifelse(estimate > 0, "positive", "negative")) %>%
+  ggplot(aes(x = term, y = estimate, fill = direction)) +
+  geom_col() +
+  coord_flip()
+
+```
+
+Throw everything into a linear model: cast, director, genre, rating, plot words.
+
+```{r}
+
+features <- horror_movies %>%
+  filter(!is.na(review_rating)) %>%
+  select(title, genres, director, cast) %>%
+  mutate(director = str_remove(director, "Directed by ")) %>%
+  # Gather everything BUT title.
+  gather(type, value, -title) %>%
+  separate_rows(value, sep = "\\| ?") %>%
+  unite(feature, type, value) %>%
+  mutate(n = 1)
+
+```
+
+
+
+
+
+
+
+

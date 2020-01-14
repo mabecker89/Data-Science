@@ -127,13 +127,48 @@ p_A_given_B <- nrow(subset(where9am, location == "office" & daytype == "weekday"
 
 ```
 
-Let's build a model!
+Let's build a naive bayes model!
 
 ```{r}
 
 locmodel <- naive_bayes(location ~ daytype, data = where9am)
 
+# Print locmodel to view the computed a priori and conditional probabilities:
+print(locmodel)
+
+
+
 ```
+
+An infrequent problem! 
+
+A veto power. Eliminate the veto power. The Laplace correction.
+
+```{r}
+
+# Build NB model of location
+locmodel <- naive_bayes(location ~ daytype + hourtype, data = bretts_locations)
+
+weekday_afternoon <- bretts_locations %>% filter(row_number() == 13) %>% select(daytype, hourtype, location)
+weekday_evening <- bretts_locations %>% filter(row_number() == 19) %>% select(daytype, hourtype, location)
+# Brett has never been to the office on a weekend.
+weekend_afternoon <- bretts_locations %>% filter(row_number() == 85) %>% select(daytype, hourtype, location)
+
+# Predict
+predict(locmodel, newdata = weekday_afternoon, type = "prob")
+predict(locmodel, newdata = weekday_evening, type = "prob")
+
+predict(locmodel, newdata = weekend_afternoon, type = "prob")
+
+locmodel2 <- naive_bayes(location ~ daytype + hourtype, laplace = 1, data = bretts_locations)
+predict(locmodel2, newdata = weekend_afternoon, type = "prob")
+
+```
+
+Preparing text data for Naive Bayes:
+- Bag of words
+
+
 
 # Chapter 3: Logistic Regression
 

@@ -12,8 +12,6 @@ library(tidyverse)
 # Load data
 big_epa_cars <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-10-15/big_epa_cars.csv")
 
-
-
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
@@ -35,23 +33,103 @@ big_epa_cars %>%
   # Find out which cars use electicity
   mutate(uses_electricity = ifelse(highwayE > 0, "Uses Electicity", "Doesn't Use Electricity")) %>%
   ggplot(mapping = aes(x = highway08, y = city08, color = uses_electricity)) +
-    geom_point() +
-    # See where points fall along the 45 degree line.
-    geom_abline(color = "red") +
-    theme_light() +
-    facet_wrap(~ uses_electricity, scales = "free") +
-    expand_limits(x = 0, y = 0)
+  geom_point() +
+  # See where points fall along the 45 degree line.
+  geom_abline(color = "red") +
+  theme_light() +
+  facet_wrap(~ uses_electricity, scales = "free") +
+  expand_limits(x = 0, y = 0) +
+  labs(x = "Highway MPG",
+       y = "City MPG",
+       title = "How does fuel efficiency differ between city and highway?")
+    
 
 ```
 
 
 ```{r}
 
+big_epa_cars %>%
+  # No electric cars
+  filter(cityE == 0) %>%
+  mutate(VClass = fct_lump(VClass, 8), # 8 most common, and then 'Other' for everything else. 
+         VClass = fct_reorder(VClass, city08)) %>%
+  ggplot(mapping = aes(x = VClass, y = city08)) +
+  geom_violin(fill = "cornflowerblue") +
+  coord_flip() +
+  theme_light()
 
+# Number of Cylinders
+big_epa_cars %>%
+  # No electric cars
+  filter(cityE == 0) %>%
+  ggplot(mapping = aes(x = cylinders, y = city08, group = cylinders)) + # Need to use 'group' when numeric.
+  geom_boxplot() +
+  theme_light()
 
+# Engine displacement
+big_epa_cars %>%
+  # No electric cars
+  filter(cityE == 0) %>%
+  ggplot(mapping = aes(x = displ, y = city08)) +
+  geom_point() +
+  theme_light()
 
 ```
 
+# Prediction
+
+Goal - non linear regression. Predict city fuel efficiency for single fuel, non-electric cars. 
+
+```{r}
+
+library(broom)
+
+# Cross Validation
+
+non_electric_cars <- big_epa_cars %>%
+  filter(cityA08 == 0, cityE == 0) %>%
+  sample_frac(1) # re-order rows randomly.
+
+training_set <- non_electric_cars %>%
+  filter(row_number() %% 5 != 0) # %% gives remainder ... this was a shorthand to get 4/5 of the data.
+
+training_set %>%
+  ggplot(aes(displ, city08)) +
+  geom_point() +
+  geom_smooth(method = "lm") # Not a great predictor! We need a non-linear method.
+
+lm(formula = city08 ~ displ, data = training_set) %>%
+  augment(data = training_set) %>%
+  ggplot(aes(displ, .resid)) +
+  geom_point() # Seems to be a pattern in the residuals. 
+
+# Let's use some splines
+library(splines)
+
+aug_spl_data <- lm(city08 ~ ns(displ, df = 2), data = training_set) %>%
+  augment(data = training_set)
+
+aug_spl_data %>%
+  ggplot(aes(x = displ, y = city08)) +
+  geom_point() +
+  geom_line(aes(y = .fitted), color = "red", size = 2)
+
+# We want to test out different df parameters
+
+models <- tibble(df = 1:6) %>%
+  mutate(lm_model = map(.x = df, ~ lm(city08 ~ ns(displ, df = .), data = training_set)))
+
+aug_unnest <- models %>%
+  mutate(augmented = map(lm_model, augment, data = training_set)) %>%
+  unnest(augmented)
+
+aug_unnest %>%
+  ggplot(aes(x = displ, city08)) +
+  geom_point(data = training_set) +
+  geom_line(aes(y = .fitted, color = factor(df)), size = 2)
+
+```
 
 
 

@@ -1,0 +1,386 @@
+---
+title: "Inference for Linear Regression"
+author: "Marcus Becker"
+date: "January 11, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(broom)
+
+# Read in data
+la_homes <- read_csv("https://assets.datacamp.com/production/repositories/848/datasets/96a4003545f7eb48e1c14b855df9a97ab8c84b1d/LAhomes.csv")
+
+restaurants <- read_csv("https://assets.datacamp.com/production/repositories/848/datasets/4ff34a40bd4e636556494f83cf40bdc10c33d49e/restNYC.csv")
+
+twins <- read_csv("https://assets.datacamp.com/production/repositories/848/datasets/84f9e42a9041695d790dfe2b5e1b6e22fc3f0118/twins.csv")
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+# Chapter 1: Inferential Ideas
+
+Make inferential instead of descriptive claims
+
+Use least squares estimation, and confidence intervals.
+
+Variability in the regression line from sample to sample.
+
+Recall that the p-value is the probability of the observed data given the null hypothesis is true.
+
+We need the *sampling distribution of the statistic* (here the slope) assuming the null hypothesis is true. 
+
+```{r}
+
+library(mosaicData)
+
+data("RailTrail")
+
+# Run a linear model regressing volume of riders on the hightemp for the day
+ride_lm <- lm(data = RailTrail, formula = volume ~ hightemp)
+
+# Get summary
+summary(ride_lm)
+
+# Tidy the model
+tidy(ride_lm)
+
+```
+
+```{r}
+
+ggplot(data = la_homes, aes(x = sqft, y = price)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_y_log10()
+
+# Let's take two sample
+sample1 <- la_homes %>%
+  sample_n(size = 50)
+
+sample2 <- la_homes %>%
+  sample_n(size = 50)
+
+both_samples <- bind_rows(sample1, sample2, .id = "replicate")
+
+ggplot(both_samples, aes(x = sqft, y = price, color = replicate)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+
+# What if we wanted to repeat this process 100 times?
+
+library(openintro)
+
+set.seed(4747)
+
+many_samples <- la_homes %>%
+  rep_sample_n(size = 50, reps = 100)
+
+glimpse(many_samples)
+
+# Seems like the 'group' argument is important here.
+ggplot(many_samples, aes(x = sqft, y = price, group = replicate)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_y_log10()
+
+# Now let's create many lm model's directly (not just let ggplot do it for us)
+many_lms <- many_samples %>%
+  group_by(replicate) %>%
+  # group_modify() returns a tibble/df - so use tidy() after the lm call.
+  group_modify(.f = ~ lm(formula = price ~ sqft, data = .) %>% tidy()) %>%
+  filter(term == "sqft")
+
+# Display distribution in model coefficients, which will allow us to calculate confidence intervals
+ggplot(many_lms, aes(x = estimate)) +
+  geom_histogram()
+
+```
+
+SE - how much does the line vary? 
+
+Variability of coefficients
+
+In order to understand the sampling distribution associated with the slope coefficient, it is valuable to visualize the impact changes in the sample and population have on the slope coefficient.
+
+```{r}
+
+# Changing the sample size directly impacts how variable the slope is:
+many_samples_10 <- la_homes %>%
+  rep_sample_n(size = 10, reps = 100)
+
+ggplot(many_samples, aes(x = sqft, y = price, group = replicate)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_y_log10()
+
+# When a smaller sample size was used, there was more variation in the positions of each trend line.
+
+# Reducing the variability in the direction of the explanatory variable (e.g. taking away the top and bottom 10%) will increase the variability of the slope coefficient. It's like the line gets squished.
+
+```
+
+# Chapter 2: Simulation-based inference for the slope parameter
+
+Permutation - how would the line vary if the null hypothesis were true? and the slope was actually 0.
+
+```{r}
+
+# We'll use the twins dataset
+
+# What is the relationship between the IQ of twins who have been raised in different environments? (i.e. fostered vs biological)
+
+# Null hypothesis: no relationship (completely a product of nurture)
+# Alternative: they are related (IQ is partly because of nature)
+
+library(infer)
+
+# Calculate the observed slope
+obs_slope <- 
+  lm(formula = Foster ~ Biological, data = twins) %>%
+  tidy() %>%
+  filter(term == "Biological") %>%
+  pull(estimate)
+
+# Simulate 20,000 (!!!) slopes by permuting - i.e. randomly sorting the twins.
+perm_slope <- twins %>%
+  specify(Foster ~ Biological) %>%
+  hypothesize(null = "independence") %>%
+  generate(reps = 20000, type = "permute") %>%
+  calculate(stat = "slope")
+
+# Now plot the stat we calculated (slopes)
+ggplot(data = perm_slope, aes(x = stat)) +
+  geom_density()
+
+# Calculate mean and standard deviation of the null sampling distribution
+perm_slope %>%
+  ungroup() %>%
+  summarise(mean_stat = mean(stat), # very close to zero.
+            std_err_stat = sd(stat))
+
+# Compute the p-value
+
+abs_obs_slope <- abs(obs_slope)
+
+perm_slope %>%
+  mutate(abs_stat = abs(stat)) %>%
+  summarise(p_value = mean(abs_stat >= abs_obs_slope)) # p-value is 0 - i.e. the data are unlikely under the null hypothesis assumption.
+
+
+```
+
+Bootstrapping!!
+
+Using the `infer` package, we can repeatedly sample from the dataset to estimate the sampling distribution and standard error of the slope coefficient.
+
+```{r}
+
+# Bootstrap replicates sample from the data WITH replacement (unlike permutation)
+boot_slope <- twins %>%
+  specify(Foster ~ Biological) %>%
+  # No need to hypothesize here - we're calculating CI's, not hypothesis testing
+  generate(reps = 1000, type = "bootstrap") %>%
+  calculate(stat = "slope")
+
+# Create a CI of stat, 2 std devs each side of the mean
+boot_slope %>%
+  summarise(lower = mean(stat) - (2 * sd(stat)),
+            upper = mean(stat) + (2 * sd(stat)))
+# So, if the statistic has a normal distribution, two sd's on either side of the mean gives you a rough 95% CI for its value.
+
+# Percentile method - bootstrap CI for slope.
+alpha <- 0.05
+p_lower <- alpha / 2
+p_upper <- 1 - (alpha / 2)
+
+boot_slope %>%
+  summarise(lower = quantile(stat, probs = p_lower),
+            upper = quantile(stat, probs = p_upper))
+# Advantage of this approach is that we make no assumption about the distribution of the statistic.
+
+```
+
+# Chapter 3: t-Based Inference for the slope parameter
+
+- Instead of simulating a null distribution (using permutations), the t-distribution can be used to calculate p-values and confidence intervals.
+- The theoretical results provides a t-distribution fit for the sampling distribution of the standardized slope statistic. 
+- R will always use the t-distribution to calculate p-values, even when it's not a good idea.
+
+The probabilities for BOTH the p-value and the CI are based on having an accurate sampling distribution. 
+
+```{r}
+
+twins_perm <- twins %>%
+  specify(Foster ~ Biological) %>%
+  hypothesize(null = "independence") %>%
+  generate(reps = 1000, type = "permute") %>%
+  group_by(replicate) %>%
+  group_modify(.f = ~ lm(Foster ~ Biological, data = .,) %>% tidy()) %>%
+  filter(term == "Biological")
+
+deg_free <- nrow(twins) - 2
+
+# Let's invegestigate the distribution of the standardized slope statistics (the slope, divided by the standard error)
+
+ggplot(twins_perm, aes(x = statistic)) +
+  geom_histogram(aes(y = ..density..)) +
+  # dt is the t-distribution
+  stat_function(fun = dt, args = list(df = deg_free), color = "red")
+
+```
+
+```{r}
+
+biological_term <- lm(Foster ~ Biological, data = twins) %>%
+  tidy() %>%
+  filter(term == "Biological")
+
+# Let's reverse our thought process. If IQ were only caused by genetics, we would expect the slope to be 1 (perfect relationship). 
+# Let's create a new test statistic, evaluating how far the observed slope is from the value of 1.
+
+biological_term %>%
+  mutate(test_statistic = (estimate - 1) / std.error,
+         p_value_onesided = pt(test_statistic, df = deg_free),
+         p_value_twosided = p_value_onesided * 2)
+
+# High p-value suggests that we cannot reject the null hypothesis: the slope of the IQ line is NOT significantly different from 1. 
+
+```
+
+What about confidence intervals?
+
+```{r}
+
+sb_tidy_mod <- lm(calories ~ fat, data = starbucks) %>%
+  tidy(conf.int = TRUE, conf.level = 1 - alpha)
+
+# Let's calculate CI via bootstrapping, shall we
+
+bs_slope <- starbucks %>%
+  specify(calories ~ fat) %>%
+  generate(reps = 10000, type = "bootstrap") %>%
+  calculate(stat = "slope")
+
+bs_slope_ci <- bs_slope %>%
+  summarise(low = quantile(stat, alpha / 2),
+            high = quantile(stat, 1 - (alpha / 2))) # Same (or very close to) what tidy() calculated for us above.
+
+```
+
+```{r}
+
+confidence_level <- 1 - alpha
+
+p_upper <- 1 - (alpha / 2)
+
+deg_free_sb <- nrow(starbucks) - 2
+
+# Calculate the critical value from the inverse cumulative density function of the t-distribution.
+critical_value <- qt(p_upper, df = deg_free_sb)
+
+sb_tidy_mod %>%
+  mutate(lower = estimate - (critical_value * std.error),
+         upper = estimate + (critical_value * std.error))
+
+```
+ 
+When working with a linear regression model, you might also want to know the plausible values for the expected value of the response at a particular explanatory location. This is, what would you expect the IQ of a Foster twin to be given a Biological twin's IQ of 100? 
+
+```{r}
+
+model <- lm(Foster ~ Biological, data = twins)
+
+model_aug <- augment(model)
+
+new_twins <- data.frame(Biological = seq(70,130,1))
+
+model_aug_pred <- augment(model, newdata = new_twins)
+
+critical_value <- qt(p_upper, df = deg_free)
+
+# Calculate a confidence interval on the predicted values
+predictions <- model_aug_pred %>%
+  mutate(lower_mean_prediction = .fitted - (critical_value * .se.fit),
+         upper_mean_prediction = .fitted + (critical_value * .se.fit))
+
+# Let's do manually what ggplot2 does for us with geom_smooth(method = "lm", se = TRUE)
+
+ggplot() +
+  geom_point(data = twins, mapping = aes(x = Biological, y = Foster)) +
+  geom_line(data = predictions, mapping = aes(x = Biological, y = .fitted), color = "green", size = 2) +
+  geom_ribbon(data = predictions, 
+              mapping = aes(x = Biological,
+                            ymin = lower_mean_prediction,
+                            ymax = upper_mean_prediction),
+              alpha = 0.2)
+
+# Use glance() to pull sigma
+twins_sigma <- model %>% glance() %>% pull(sigma)
+
+predictions2 <- predictions %>%
+  mutate(std_err_of_predictions = sqrt(twins_sigma ^ 2) + (.se.fit ^ 2))
+
+predictions3 <- predictions2 %>%
+  # Calculate the confidence intervals
+  mutate(lower_response_prediction = .fitted - (critical_value * std_err_of_predictions),
+         upper_response_prediction = .fitted + (critical_value * std_err_of_predictions))
+
+ggplot() +
+  geom_point(aes(x = Biological, y = Foster), data = twins) +
+  geom_smooth(aes(x = Biological, y = Foster), data = twins, method = "lm") +
+  geom_ribbon(aes(x = Biological, ymin = lower_response_prediction, ymax = upper_response_prediction),
+              data = predictions3,
+              alpha = 0.2,
+              fill = "red")
+
+```
+
+# Chapter 4: Technical Conditions in Linear Regression
+
+LINE
+- Linear model
+- Independent observations
+- Points are normally distributed around the line
+- Equal variability around the line for all values of the explanatory variable.
+
+Is there trend between .fitted and .resid (use augment() to find these) - if not, that's good. 
+
+Effect of an outlier:
+
+Different regression lines
+Different inferential statistics
+
+# Chapter 5: Building on Inference in Simple Linear Regression
+
+```{r}
+
+la_homes$price <- as.numeric(la_homes$price)
+
+la_homes1 <- la_homes %>% filter(bed > 0)
+
+lm(formula = log(price) ~ log(bed), data = la_homes1) %>% tidy()
+
+```
+
+Multicollinearity 
+
+- explanatory variables are correlated 
+
+```{r}
+
+lm(formula = log(price) ~ log(sqft) + log(bath), data = la_homes) %>% tidy()
+
+# Bathrooms no longer significant! 
+
+```
+
+
+
+
+
+
+

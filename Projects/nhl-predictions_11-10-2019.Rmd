@@ -13,11 +13,14 @@ library(broom)
 library(ranger)
 library(mgcv)
 library(rsample)
-library(here)
 library(fs)
 library(lubridate)
+library(here)
+library(RcppRoll)
+library(plotly)
 
-# Import data
+
+# Import data - also, we want to be able to scrape this data easily and on an ongoing basis. Learn rvest package.
 
 paths <- dir_ls(here("./data/base"), glab = "*.csv")
 
@@ -44,6 +47,7 @@ Here are some ideas for predictors:
 + Pts percentage (of both teams)
 + Home vs. Away game
 + Scheduling
+  - What was the distance travelled since the last game? Back to back games?
 + Advanced metrics like CF, FF, xGF, etc. 
   - Probably want to build in here some variables that capture how well a team has been playing recently.
 + Injuries? Pct of team cap that is playing in the game. 
@@ -61,7 +65,7 @@ Then build the train/test dataset off of that.
 
 ```{r}
 
-# Let's look at one team in 15-16 to start.
+# Let's look at one team in 15-16 to start. Oilers!
 
 oilers_1516 <- ls_raw[["reg_1516_es"]] %>%
   filter(Team == "Edmonton Oilers") %>%
@@ -73,18 +77,145 @@ oilers_1516 <- ls_raw[["reg_1516_es"]] %>%
   mutate(home = ifelse(str_detect(score, "^Oilers"), 0, 1)) %>%
   mutate(score_numeric = str_match_all(score, "[0-9]+")) %>%
   mutate(score_numeric = map(score_numeric, setNames, c("away_score", "home_score"))) %>%
-  unnest_wider(score_numeric)
+  unnest_wider(score_numeric) %>%
+  # Code game outcome:
+  mutate(outcome = as.factor(ifelse((home_score > away_score & home == "1") |
+                                    (away_score > home_score & home == "0"), 
+                                    "Win", "Loss")))
+
+```
+
+Now we need to scale this to all teams. This is for 2,460 games of the regular season in 15-16.
+
+```{r warning=FALSE}
+
+allteams_1516 <- ls_raw[["reg_1516_es"]] %>%
+  # filter(Team == "Edmonton Oilers") %>%
+  select(Game, Team, CF, CA, FF, FA, SF, SA, GF, GA, xGF, xGA, SCF, SCA,
+         HDCF, HDCA) %>%
+  # Create Date variable
+  mutate(Date = ymd(str_extract(Game, "^.{10}"))) %>%
+  separate(Game, into = c("date", "score"), sep = " - ", remove = FALSE) %>%
+  # mutate(home = ifelse(str_detect(score, "^Oilers"), 0, 1)) %>%
+  group_by(Game) %>%
+  mutate(home = seq(0, 1, 1)) %>%
+  mutate(score_numeric = str_match_all(score, "[0-9]+")) %>%
+  mutate(score_numeric = map(score_numeric, setNames, c("away_score", "home_score"))) %>%
+  unnest_wider(score_numeric) %>%
+  # Code game outcome:
+  mutate(outcome = ifelse((home_score > away_score & home == "1") | (away_score > home_score & home == "0"), "Win", "Loss"))
+
+```
+
+Now, can we scale to all four season?!
+
+```{r message = FALSE, warning = FALSE}
+
+df_1 <- ls_raw[["reg_1516_es"]] %>%
+  # filter(Team == "Edmonton Oilers") %>%
+  select(Game, Team, CF, CA, FF, FA, SF, SA, GF, GA, xGF, xGA, SCF, SCA,
+         HDCF, HDCA) 
+df_2 <- ls_raw[["reg_1617_es"]] %>%
+  # filter(Team == "Edmonton Oilers") %>%
+  select(Game, Team, CF, CA, FF, FA, SF, SA, GF, GA, xGF, xGA, SCF, SCA,
+         HDCF, HDCA) 
+df_3 <- ls_raw[["reg_1718_es"]] %>%
+  # filter(Team == "Edmonton Oilers") %>%
+  select(Game, Team, CF, CA, FF, FA, SF, SA, GF, GA, xGF, xGA, SCF, SCA,
+         HDCF, HDCA) 
+df_4 <- ls_raw[["reg_1819_es"]] %>%
+  # filter(Team == "Edmonton Oilers") %>%
+  select(Game, Team, CF, CA, FF, FA, SF, SA, GF, GA, xGF, xGA, SCF, SCA,
+         HDCF, HDCA)
+
+df_master <- dplyr::bind_rows(df_1, df_3)
   
+str(df_raw)
+
+```
+
+
+```{r}
+
+# Code the rolling averages of corsi, fenwick, shots, and goals. 
+
+allteams_1516_rollin <- allteams_1516 %>%
+  # Select the parameters we're interested in:
+  select(Game, Date, Team, CF, CA, FF, FA, SF, SA, GF, GA) %>%
+  # Set up 'windows' of games
+  crossing(window = c(3, 5, 10, 20)) %>%
+  group_by(window, Team) %>%
+  nest() %>%
+  # Corsi
+  mutate(rolling_CF = map2(.x = data, 
+                           .y = window, 
+                           .f = ~ roll_sum(x = .x$CF, n = .y, fill = NA, align = "right")),
+         rolling_CA = map2(.x = data, 
+                           .y = window, 
+                           .f = ~ roll_sum(x = .x$CA, n = .y, fill = NA, align = "right")),
+         rolling_C_pct = map2(.x = rolling_CF, 
+                            .y = rolling_CA, 
+                            .f = ~ (.x / (.x + .y)))) %>%
+  # Fenwick
+  mutate(rolling_FF = map2(.x = data, 
+                           .y = window, 
+                           .f = ~ roll_sum(x = .x$FF, n = .y, fill = NA, align = "right")),
+         rolling_FA = map2(.x = data, 
+                           .y = window, 
+                           .f = ~ roll_sum(x = .x$FA, n = .y, fill = NA, align = "right")),
+         rolling_F_pct = map2(.x = rolling_FF, 
+                            .y = rolling_FA, 
+                            .f = ~ (.x / (.x + .y)))) %>%
+  # Shots
+  mutate(rolling_SF = map2(.x = data, 
+                           .y = window, 
+                           .f = ~ roll_sum(x = .x$SF, n = .y, fill = NA, align = "right")),
+         rolling_SA = map2(.x = data, 
+                           .y = window, 
+                           .f = ~ roll_sum(x = .x$SA, n = .y, fill = NA, align = "right")),
+         rolling_S_pct = map2(.x = rolling_SF, 
+                            .y = rolling_SA, 
+                            .f = ~ (.x / (.x + .y)))) %>%
+  # Goals
+  mutate(rolling_GF = map2(.x = data, 
+                           .y = window, 
+                           .f = ~ roll_sum(x = .x$GF, n = .y, fill = NA, align = "right")),
+         rolling_GA = map2(.x = data, 
+                           .y = window, 
+                           .f = ~ roll_sum(x = .x$GA, n = .y, fill = NA, align = "right")),
+         rolling_G_pct = map2(.x = rolling_GF, 
+                            .y = rolling_GA, 
+                            .f = ~ (.x / (.x + .y)))) %>%
+  # Select the rolling percentages
+  select(window, Team, data, rolling_C_pct, rolling_F_pct, rolling_S_pct) %>%
+  unnest(c(rolling_C_pct, rolling_F_pct, rolling_S_pct)) %>%
+  mutate(game_num = seq(1, 82, 1)) %>%
+  ungroup(window, Team)
+
+# Let's view the Canadian Teams graphically!
+
+cdn_teams <- c("Edmonton Oilers", "Vancouver Canucks", "Calgary Flames", "Winnipeg Jets",
+               "Toronto Maple Leafs", "Ottawa Senators", "Montreal Canadiens")
+
+plot1 <- allteams_1516_rollin %>%
+  mutate(window = as.factor(window)) %>%
+  mutate(window = fct_infreq(window)) %>%
+  filter(Team %in% cdn_teams) %>%
+  # Choosing corsi
+  ggplot(aes(x = game_num, y = rolling_C_pct, color = Team)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(aes(yintercept = 0.5), color = "black", lty = 2) +
+  facet_wrap(~ window)
+
+
+ggplotly(plot1)
   
-  #mutate(home_score = ifelse(home == "1", map_chr(score_numeric, 1), map_chr(score_numeric, 2)))
 
 
 
 
 ```
-
-
-
 
 
 

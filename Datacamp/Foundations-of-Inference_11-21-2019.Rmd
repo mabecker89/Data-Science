@@ -1,0 +1,233 @@
+---
+title: "Foundations of Inference"
+author: "Marcus Becker"
+date: "November 20, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction to ideas of inference
+
+- process of making claims about a population based on a sample
+
+Randomized distributions
+
+- Understanding the null distribution: generating a distribution of the statistic from the null population gives information about whether the observed data are inconsistent with the null hypothesis. 
+
+```{r}
+
+library(NHANES)
+library(ggplot2)
+library(infer)
+
+# Load data
+data("NHANES")
+
+ggplot(data = NHANES, mapping = aes(x = Gender, fill = HomeOwn)) +
+  geom_bar(position = "fill") +
+  labs(y = "Relative Frequencies")
+
+ggplot(data = NHANES, mapping = aes(x = SleepHrsNight, color = SleepTrouble)) +
+  geom_density(adjust = 2) +
+  facet_wrap(~ HealthGen)
+
+# Let's investigate the relationship between gender and home ownership. 
+# Before we permute the data, we must calculate the original observed statistic - i.e. from the population.
+
+homes <- NHANES %>%
+  select(Gender, HomeOwn) %>%
+  filter(HomeOwn %in% c("Own", "Rent"))
+
+diff_orig <- homes %>%
+  group_by(Gender) %>%
+  # Summarise proportion of homeowners for each gender
+  summarise(prop_own = mean(HomeOwn == "Own")) %>%
+  # Summarise difference in proportion of homeowners between genders
+  summarise(obs_diff_prop = diff(prop_own))
+
+# Using the infer framework: 
+# - specify response and explanatory variables
+# - hypothesize to declare the null hypothesis
+# - generate resamples, permutations, or simulations
+
+homeown_perm <- homes %>%
+  specify(HomeOwn ~ Gender, success = "Own") %>%
+  hypothesize(null = "independence") %>%
+  generate(reps = 1000, type = "permute") %>%
+  # Calculate statistic of interest
+  calculate(stat = "diff in props", order = c("male", "female")) %>%
+  rename(diff_perm = stat)
+
+ggplot(homeown_perm, aes(x = diff_perm)) +
+  geom_dotplot(binwidth = 0.0008) +
+  geom_density() +
+  geom_vline(data = diff_orig, aes(xintercept = obs_diff_prop), 
+             color = "red", size = 2)
+
+# So we can see that it doesn't seem like there was a difference. 
+
+```
+
+# Completing a randomization test: gender discrimination
+
+```{r}
+
+# Load data
+disc <- read_rds(here("Datacamp/data/disc_new.rds")) # Weirdly, different data than they're using in the course.
+
+disc_big <- read_rds(here("Datacamp/data/disc_big.rds")) # Sort of the same one, but more observations.
+
+# Create a contingency table summarizing the data
+disc_big %>%
+  count(sex, promote)
+
+# Calculate the "testa-statistic"! Haha. This is the actual difference we're seeing in our sample. 
+diff_orig <- disc_big %>%
+  group_by(sex) %>%
+  summarise(promoted_prop = mean(promote == "promoted")) %>%
+  summarise(stat = diff(promoted_prop)) %>%
+  pull()
+
+# Replicate the entire dataframe, permuting the promote variable:
+disc_perm <- disc_big %>%
+  sample_n(48) %>%
+  specify(promote ~ sex, success = "promoted") %>%
+  hypothesize(null = "independence") %>%
+  generate(reps = 1000, type = "permute")
+
+disc_perm %>%
+  group_by(replicate) %>%
+  count(promote, sex)
+
+disc_perm %>%
+  # Calculate statistic of interest
+  calculate(stat = "diff in props", order = c("male", "female")) %>%
+  ggplot(aes(x = stat)) +
+  geom_histogram(bindwidth = 0.1) +
+  geom_vline(aes(xintercept = diff_orig), color = "red")
+
+# Calculating quantiles - critical region. Which observed statistics are consistent with the null distribution?
+
+uppers <- disc_perm %>%
+  calculate(stat = "diff in props", order = c("male", "female")) %>%
+  # Find the 0.9, 0.95, and 0.99 quantiles of diff_perm's stat
+  summarise(q.90 = quantile(stat, p = 0.9),
+            q.95 = quantile(stat, p = 0.95),
+            q.99 = quantile(stat, p = 0.99))
+
+lowers <- disc_perm %>% 
+  calculate(stat = "diff in props", order = c("male", "female")) %>%
+  # Now find the other side
+  summarise(q.01 = quantile(stat, p = 0.01),
+            q.05 = quantile(stat, p = 0.05),
+            q.10 = quantile(stat, p = 0.1))
+
+# Definition of p-value -> Probability of observing data as or more extreme than what we actually got given that the null hypothesis is true.
+
+disc_perm %>%
+  calculate(stat = "diff in props", order = c("male", "female")) %>%
+  visualise(obs_stat = diff_orig, direction = "greater")
+
+disc_perm %>%
+  calculate(stat = "diff in props", order = c("male", "female")) %>%
+  get_p_value(obs_stat = diff_orig, direction = "greater")
+
+# New discimination dataset
+disc_new <- read_rds(here("Datacamp/data/disc_new.rds"))
+
+disc_new_perm <- disc_new %>%
+  specify(promote ~ sex, success = "promoted") %>%
+  hypothesize(null = "independence") %>%
+  generate(reps = 1000, type = "permute") %>%
+  calculate(stat = "diff in props", order = c("male", "female")) 
+
+diff_orig_new <- disc_new %>%
+  group_by(sex) %>%
+  summarise(promoted_prop = mean(promote == "promoted")) %>%
+  summarise(stat = diff(promoted_prop)) %>%
+  pull
+
+disc_new_perm %>%
+  ggplot(aes(x = stat)) +
+  geom_histogram() +
+  geom_vline(aes(xintercept = diff_orig_new), color = "red") # much closer to the middle
+
+```
+
+# Hypothesis testing errors: opportunity costs
+
+```{r}
+
+# Can't find the data for this one. Darn. 
+
+
+```
+
+# Confidence Intervals
+
+What's a parameter? A numerical value from the population. 
+
+Bootstrapping
+
+- Allows us to estimate the distance between a statistic and a parameter
+- Resampling many, many times
+- Measure of how p-hat varies
+- Standard error is a measure of how variable a statistic is around a parameter
+
+
+```{r}
+
+# Using all_polls
+all_polls <- read_rds(here("./Datacamp/data/all_polls.rds"))
+
+# Compute sample proportion for each of the 1000 original samples (p-hat)
+ex1_props <- all_polls %>%
+  group_by(poll) %>%
+  summarise(stat = mean(vote == "yes"))
+
+# Select a poll from which to resample
+one_poll <- all_polls %>%
+  filter(poll == "100") %>%
+  select(vote)
+
+# Compute a p-hat* for each resampled poll
+ex2_props <- one_poll %>%
+  specify(response = vote, success = "yes") %>%
+  generate(reps = 1000, type = "bootstrap") %>%
+  calculate(stat = "prop")
+
+# Calculate variable of p-hat
+ex1_props %>%
+  summarise(variability = sd(stat))
+
+ex2_props %>%
+  summarise(variability = sd(stat))
+
+# Lesson: The variability in the proportion of "successes" in a sample is approximately the same whether we sample from the population or resample from a sample.
+
+# Combine data from both experiments
+both_props <- bind_rows(ex1_props, ex2_props, .id = "experiment")
+
+# Plot distribution
+ggplot(data = both_props, mapping = aes(x = stat, color = experiment)) +
+  geom_density(bw = 0.1)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
