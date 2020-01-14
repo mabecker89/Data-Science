@@ -1,0 +1,262 @@
+---
+title: "Introduction to Writing Functions in R"
+author: "Marcus Becker"
+date: "December 19, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Why should we write functions?
+
+Pass arguments by position.
+Or, pass arguments by name. Order doesn't matter.
+Or, combination approach - pass arguments in the order listed by the function documentation, naming less common ones.
+
+Functions eliminate repetition from your code. 
+Can reduce workload. 
+Helps avoid errors. 
+
+Functions also allow for code reuse and sharing. 
+
+Converting scripts into functions:
+
+Basic function template:
+
+```{r}
+
+my_fun <- function(arg1, arg2) {
+   # Do something
+}
+
+```
+
+- Make a template
+- Paste in the script
+- Choose the arguments
+- Replace specific values with argument names
+- Make specific variable names more general
+- Remove a final assignment
+
+Let's write our first function:
+
+```{r}
+
+coin_sides <- c("heads", "tails")
+
+sample(coin_sides, 1)
+
+# Now, we write it as a function.
+
+toss_coin <- function() {
+  coin_sides <- c("heads", "tails")
+  sample(coin_sides, 1)
+}
+
+toss_coin()
+
+# How about adding some arguments?
+
+toss_coin <- function(n_flips) {
+  coin_sides <- c("heads", "tails")
+  sample(coin_sides, size = n_flips, replace = TRUE)
+}
+
+toss_coin(n_flips = 10)
+
+# And some more?
+toss_coin <- function(n_flips, p_head) {
+  coin_sides <- c("heads", "tails")
+  weights <- c(p_head, 1 - p_head)
+  sample(coin_sides, size = n_flips, replace = TRUE, prob = weights)
+}
+
+toss_coin(n_flips = 10, p_head = 0.8)
+
+```
+
+Functions can be thought of as a verb. 
+
+Function names should contain a verb! e.g. get, calculate, run, process, import, clean, tidy, draw
+
+Acronyms aren't self-explanatory.
+
+Understanding code >> typing code.
+
+Types of arguments:
+- Data arguments - what you compute on. Often called x, y, or simply data.
+- Detail arguments - how you perform the computation
+
+Data args should precede detail args -> so that things play nicely with the pipe operator!
+
+Default arguments (for detail arguments)
+
+- Set the default in the signature 
+- Categorical defaults -> use match.arg() in the body. If not specified, the first option is used as the default.
+- By specifying default arguments, you can make a function easier to use. 
+
+```{r}
+
+# n is a detailed argument that we've specified a default for. 
+# Same with na.rm and labels. 
+cut_by_quantile <- function(x, n = 5, na.rm = TRUE, labels = NULL, interval_type) {
+  probs <- seq(0, 1, length.out = n + 1)
+  qtiles <- quantile(x, probs, na.rm = na.rm, names = FALSE)
+  right <- switch(interval_type, "(lo, hi]" = TRUE, "[lo, hi)" = FALSE)
+  cut(x, qtiles, labels = labels, right = right, include.lowest = TRUE)
+}
+
+```
+
+Passing arguments between functions
+
++ Using '...' in your signature. Any arguments passed by the user go straight to the function within the body. i.e., rather than writing your own code, you can outsource this functionality to another function you're calling. 
+
+```{r}
+
+get_reciprocal <- function(x) {
+  1 / x
+}
+
+calc_harmonic_mean <- function(x, ...) {
+  x %>%
+    get_reciprocal() %>%
+    mean(...) %>%
+    get_reciprocal()
+}
+
+```
+
+Checking arguments
+
+- Checks on user input should be included at the start of the function body (i.e throw it immediately)
+- Make the error message easily understandable.
+
+```{r}
+
+library(assertive)
+
+```
+
+Returning values from functions
+
++ Returning early
+- Sometimes, you don't need to run through the whole body of a function to get the answer. In that case you can return early from that function using return().
+
+```{r}
+
+is_leap_year <- function(year) {
+  # If year is div. by 400 return TRUE
+  if(is_divisible_by(year, 400)) {
+    return(TRUE)
+  }
+  # If year is div. by 100 return FALSE
+  if(is_divisible_by(year, 100)) {
+    return(FALSE)
+  }
+  # If year is div. by 4 return TRUE
+  if(is_divisible_by(year, 4)) {
+    return(TRUE)
+  }
+  # Otherwise return FALSE
+  FALSE
+}
+
+is_leap_year(1989)
+
+```
+
++ Return invisibly -> use the invisible() function
+
+Returning multiple values from functions
+
+- Functions can only return one value. If you want to return multiple things, then you can store them all in a list.
+
+- Side note: if users want to have the list items as separate variables, they can assign each list element to its own variable using zeallot's multi-assignment operator, %<-%
+
+```{r}
+
+library(broom)
+library(zeallot)
+
+snake_river_visits <- readRDS(url("https://assets.datacamp.com/production/repositories/5028/datasets/a55843f83746968c7f118d82ed727db9c71e891f/snake_river_visits.rds","rb"))
+
+model <- glm(formula = n_visits ~ gender + income + travel, data = snake_river_visits, family = "poisson")
+summary(model)
+
+groom_model <- function(model) {
+# Use broom tools to get a list of 3 dataframes
+  list(
+    # Get model-level values
+    model = glance(model),
+    # Get coefficient-level values
+    coefficients = tidy(model),
+    # Get observation-level values
+    observations = augment(model)
+  )
+}
+
+groom_model(model) # returns a list.
+
+# Now, let's assign each element of the list to its own individual variable, i.e. multi-assignment
+c(mdl, cff, obs) %<-% groom_model(model)
+
+```
+
+# Returning metadata
+
+Sometimes returning a list isn't appropriate. You can include metadata in the return value by storing it as attributes.
+
+```{r}
+
+# The syntax for assigning attributes is as follows:
+attr(object, "attribute_name") <- attribute_value
+
+```
+
+Environments
+
+- Environments are like special lists. 
+- Environments are used to store other variables.
+- Every environment has a parent environment ... except the empty environment.
+
+Scope and precedence 
+
+Each function you write gets its own environment.
+
+When a variable is defined outside the function in the global environment, it can still be used inside the function.
+HOWEVER, when a variable is defined within a function, it cannot be accessed from outside the function.
+
+Variables inside functions take precedence over variables outside of the function.
+
+```{r}
+
+# Case Study
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
