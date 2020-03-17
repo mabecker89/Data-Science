@@ -1,0 +1,185 @@
+---
+title: "nfl-attendance_03-17-2020"
+author: "Marcus Becker"
+date: "March 17, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(tidymodels)
+
+# Load data
+attendance <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-02-04/attendance.csv')
+standings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-02-04/standings.csv')
+games <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-02-04/games.csv')
+
+```
+
+Watching Julia Silge's Youtube tutorial: Predictive modeling in R with tidymodels and NFL attendance
+
+## Explore data
+
+```{r}
+
+attendance_joined <- attendance %>% 
+  left_join(standings, by = c("year", "team_name", "team"))
+
+attendance_joined %>%
+  filter(!is.na(weekly_attendance)) %>%
+  ggplot(aes(x = fct_reorder(team_name, weekly_attendance), y = weekly_attendance, fill = playoffs)) +
+  geom_boxplot(outlier.alpha = 0.5) +
+    coord_flip()
+
+attendance_joined %>%
+  distinct(team_name, year, margin_of_victory, playoffs) %>%
+  ggplot(aes(margin_of_victory, fill = playoffs)) +
+  geom_histogram(position = "identity", alpha = 0.7)
+
+```
+
+Build a dataset to use for modeling
+
+```{r}
+
+df_attendance <- attendance_joined %>%
+  filter(!is.na(weekly_attendance)) %>%
+  # Columns that might be of interest to us in the model.
+  select(weekly_attendance, team_name, year, week, margin_of_victory, strength_of_schedule, playoffs)
+
+```
+
+## Train model
+
+```{r}
+
+library(tidymodels)
+
+# rsample - split into train/test - create split object
+split <- df_attendance %>%
+  initial_split(strata = playoffs) # same prop of playoffs in both sets
+
+# Call training() on split
+nfl_train <- training(split) # prop = 3/4
+nfl_test <- testing(split) # prop = 1/4
+
+```
+
+Build some simple models
+
+```{r}
+
+# Model specification - linear model
+
+lm_spec <- linear_reg() %>%
+  set_engine(engine = "lm")
+
+lm_fit <- lm_spec %>%
+  fit(weekly_attendance ~ ., data = nfl_train)
+
+```
+
+```{r}
+
+# Model specification - random forest
+
+rf_spec <- rand_forest(mode = "regression") %>%
+  set_engine("ranger")
+
+# Now fit the model
+rf_fit <- rf_spec %>%
+  fit(weekly_attendance ~., data = nfl_train)
+
+```
+
+
+## Evaluate model
+
+```{r}
+
+results_train <- lm_fit %>%
+  predict(new_data = nfl_train) %>%
+  mutate(truth = nfl_train$weekly_attendance, model = "lm") %>%
+  bind_rows(rf_fit %>%
+              predict(new_data = nfl_train) %>%
+              mutate(truth = nfl_train$weekly_attendance,
+                     model = "rf"))
+
+results_test <- lm_fit %>%
+  predict(new_data = nfl_test) %>%
+  mutate(truth = nfl_test$weekly_attendance, model = "lm") %>%
+  bind_rows(rf_fit %>%
+              predict(new_data = nfl_test) %>%
+              mutate(truth = nfl_test$weekly_attendance,
+                     model = "rf"))
+
+```
+
+Use package `yardstick`
+
+```{r}
+
+results_train %>%
+  group_by(model) %>%
+  rmse(truth = truth, estimate = .pred)
+
+results_test %>%
+  group_by(model) %>%
+  rmse(truth = truth, estimate = .pred)
+
+# Vis
+results_test %>%
+  mutate(train = "testing") %>%
+  bind_rows(results_train %>% mutate(train = "training")) %>%
+  ggplot(aes(truth, .pred, color = model)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(lty = 2, color = "gray40", size = 1) +
+  facet_wrap(~train)
+
+```
+
+Let's try again!
+
+Use re-sampling.
+
+```{r}
+
+# Cross validation:
+nfl_folds <- vfold_cv(nfl_train, strata = playoffs)
+
+rf_results <- fit_resamples(
+  weekly_attendance ~ .,
+  rf_spec, # model specification
+  nfl_folds,
+  control = control_resamples(save_pred = TRUE) # got some predictions!
+)
+
+rf_results %>%
+  collect_metrics()
+
+# Vis
+rf_results %>%
+  unnest(.predictions) %>%
+  ggplot(aes(weekly_attendance, .pred, color = id)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(lty = 2, color = "gray40", size = 1)
+
+```
+
+What about modeling tuning? 
+
+- Hyperparameter tuning. 
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,38 @@
+---
+title: "Simulating a week of rain"
+author: "Marcus Becker"
+date: "February 7, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(tidyverse)
+
+sim <- crossing(trial = 1:10000,
+         weekday = 1:5,
+         commute = c("Morning", "Evening")) %>%
+  arrange(trial, weekday, desc(commute)) %>%
+  mutate(rain = rbinom(n(), 1, ifelse(commute == "Morning", 0.025, 0.0125)),
+         home_change = case_when(
+           commute == "Morning" & rain ~ -1,
+           commute == "Evening" & rain ~ 1,
+           TRUE ~ 0),
+         office_change = -home_change) %>%
+  group_by(trial) %>%
+  mutate(home = 2 + cumsum(home_change),
+         office = 1 + cumsum(office_change))
+
+sim %>%
+  summarise(dry = !any(home < 0 | office < 0)) %>%
+  summarise(mean(dry)) %>%
+  pull()
+
+```
+
+
+

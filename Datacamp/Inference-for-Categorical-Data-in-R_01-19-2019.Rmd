@@ -1,0 +1,145 @@
+---
+title: "Inference for Categorical Data in R"
+author: "Marcus Becker"
+date: "January 18, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(infer)
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Chapter 1: Inference for a single parameter
+
+- get standard errors via bootstrapping (computational)
+
+- standard error is the standard deviation of the sampling distribution.
+
+- The power of bootstrapping is to mimic the sampling process to create similiar, but slightly different, data sets. 
+
+```{r}
+
+
+
+```
+
+## Chapter 2: Proportions: Testing and Power
+
+Hypothesis test
+
+- Null hypothesis: theory about the state of the world.
+- Null distribution: distribution of the test statistics (p-hats) assuming null is true.
+- p-value: a measure of consistency between the null hypothesis and your observations. 
+
+
+```{r}
+
+# Load general social survey data
+load(url("https://assets.datacamp.com/production/repositories/1703/datasets/622fb3f93aa52cac9da874699feb95911eba8abd/gss.RData"))
+
+# Just 2016 data
+gss2016 <- gss %>%
+  filter(year == "2016",
+         !is.na(postlife))
+
+# Bar plot
+ggplot(gss2016, aes(x = postlife)) + 
+  geom_bar()
+
+# Calculate and save proportion that believe
+p_hat <- gss2016 %>%
+  summarise(prop_yes = mean(postlife == "YES")) %>%
+  pull()
+
+# Imagine you here the claim that "3/4 of all Americans believe in life after death".
+# - This is a point null hypothesis that the p-hat value is 0.75
+
+# Generate one data set under H0
+sim1 <- gss2016 %>%
+  specify(response = postlife, success = "YES") %>%
+  hypothesize(null = "point", p = 0.75) %>%
+  generate(reps = 1, type = "simulate")
+
+sim1 %>% summarise(prop_yes = mean(postlife == "YES")) %>% pull() # Very close to 0.75
+
+# Now let's generate null distribution
+null <- gss2016 %>%
+  specify(response = postlife, success = "YES") %>%
+  hypothesize(null = "point", p = 0.75) %>%
+  generate(reps = 500, type = "simulate") %>%
+  calculate(stat = "prop")
+
+ggplot(null, aes(x = stat)) +
+  geom_density() +
+  geom_vline(xintercept = p_hat, color = "red")
+
+# What's the p-value? It's the proportion of 'stats' that are equal to or greater (and lesser, if two sided)
+null %>%
+  summarise(
+    one_tailed_pval = mean(stat >= p_hat),
+    two_tailed_pval = 2 * one_tailed_pval
+  )
+
+```
+
+Intervals for differences
+
+```{r}
+
+# Let's explore how opinions about capital punishment differ between men and women.
+
+# Plot distribution of sex filled by cappun
+ggplot(gss2016, aes(x = sex, fill = cappun)) +
+  geom_bar(position = "fill")
+
+# Compute the two proportions:
+p_hats <- gss2016 %>%
+  group_by(sex) %>%
+  summarise(props = mean(cappun == "FAVOR", na.rm = TRUE)) %>%
+  pull() %>%
+  diff() # diff in prop of females that favor minus the prop of males (R does diff alphabetically)
+
+# Set up infer chain
+null <- gss2016 %>%
+  specify(cappun ~ sex, success = "FAVOR") %>%
+  hypothesize(null = "independence") %>%
+  generate(reps = 500, type = "permute") %>%
+  calculate(stat = "diff in props", order = c("FEMALE", "MALE"))
+
+# Visualize
+ggplot(null, aes(x = stat)) +
+  geom_density() +
+  geom_vline(xintercept = p_hats, color = "red")
+
+# Create the bootstrap distribution for use in a confidence interval
+boot <- gss2016 %>% 
+  specify(cappun ~ sex, success = "FAVOR") %>%
+  generate(reps = 500, type = "bootstrap") %>%
+  calculate(stat = "diff in props", order = c("FEMALE", "MALE"))
+
+# Compute sd of boot distribution to estimate the se 
+SE <- boot %>%
+  summarise(se = sd(stat)) %>%
+  pull()
+
+# Form the upper and lower bounds of the CI
+c(p_hats - (2 * SE), p_hats + (2 * SE))
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+

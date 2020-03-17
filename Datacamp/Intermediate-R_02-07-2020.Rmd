@@ -1,0 +1,100 @@
+---
+title: "Intermediate R"
+author: "Marcus Becker"
+date: "February 5, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+
+
+```
+
+# Chapter 2: Loops
+
+- while loops -> continue to execute code will statement is still TRUE
+
+```{r}
+
+# while loop
+
+while(condition) {
+  expression
+}
+
+ctr <- 1
+
+while(ctr <= 7) {
+  print(paste("ctr is set to", ctr))
+  ctr <- ctr + 1 # update - make sure while loop will end at some point.
+}
+
+# Evaluate until ctr reaches 8.
+
+# Insert break statement
+
+while(ctr <= 7) {
+  if(ctr %% 5 == 0) { # Is ctr divisible by 5?
+    break # abandon while loop
+  }
+  print(paste("ctr is set to", ctr))
+  ctr <- ctr + 1
+}
+
+# Remember, the condition of the while loop should become FALSE as some point.
+
+speed <- 60
+
+while(speed >= 40) {
+  
+  print(paste("Slow down! You're going", speed, ", which is too fast!"))
+  
+  speed <- speed - 5
+        
+}
+
+```
+
+For loops!
+
+```{r}
+
+for(var in seq) {
+  expression
+}
+
+cities <- c("New York", "Edmonton", "Calgary", "Vancouver")
+
+for(i in cities) {
+  print(paste(i, "is a beautiful city"))
+}
+
+cities <- list("New York", "Edmonton", "Calgary")
+
+for(i in cities) {
+  print(i)
+}
+
+cities <- data.frame(City = c("New York", "Edmonton", "Calgary"))
+
+for(i in cities) {
+  print(i)
+}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,194 @@
+---
+title: "Hierarchical and Mixed Effects Models in R"
+author: "Marcus Becker"
+date: "February 15, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+# Chapter 1: Overview and Introduction to Hierarchical and Mixed Models
+
+- lme4 package
+
+```{r}
+
+library(lme4)
+library(lmerTest)
+library(broom.mixed)
+
+studentData <- read_csv("https://assets.datacamp.com/production/repositories/1803/datasets/975fe2b0190804d854a5da90083364629fb6af2e/classroom.csv")
+
+# Visualize the data first
+ggplot(data = studentData, aes(x = housepov, y = mathgain)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE)
+
+# Fit a linear model
+summary(lm(formula = mathgain ~ housepov, data = studentData)) # Not predictive. We haven't accounted for the hierarchical nature of the data.
+
+# Class
+classData <- studentData %>%
+  group_by(classid) %>%
+  summarise(mathgain = mean(mathgain),
+            housepov = mean(housepov))
+
+ggplot(data = classData, aes(x = housepov, y = mathgain)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE)
+
+# School
+schoolData <- studentData %>%
+  group_by(schoolid) %>%
+  summarise(mathgain = mean(mathgain),
+            housepov = mean(housepov))
+
+ggplot(data = schoolData, aes(x = housepov, y = mathgain)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE)
+
+```
+
+Multiple regression in R tips:
+
++ lm(y ~ x -1) - the -1 estimates an intercept for each x (group), rather than relative to the first group.
++ numeric vs factors - R automatically assumes a numeric predictor is a slope
++ scaling parameters and slopes
++ shortcut for interaction is x1*x2
+
+Without other coefficients, a single intercept is the global mean of the data.
+Multiple intercepts allow you to estimate the mean for each group as long as other coefficients are not estimated (when the groups are discrete...).
+
+What about continuous predictor variables? -> slopes.
+
+```{r}
+
+# Mixed effects model (i.e. has both fixed and random effects)
+me_mod <- lmer(formula = mathgain ~ sex + mathprep + mathknow + (1|classid) + (1|schoolid),
+               data = studentData,
+               na.action = "na.omit",
+               REML = TRUE)
+
+summary(me_mod)
+
+# Extract out the coefficients
+modelOutPlot <- broom.mixed::tidy(me_mod, conf.int = TRUE) # note: have to use broom.extra for me models
+
+modelOutPlot <- modelOutPlot[modelOutPlot$effect == "fixed" &
+                             modelOutPlot$term != "(Intercept)", ]
+
+# Plot the coefficients of interest
+ggplot(data = modelOutPlot, aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high)) +
+  theme_minimal() +
+  geom_hline(yintercept = 0.0, color = "red", size = 2) +
+  geom_point() +
+  geom_linerange() +
+  coord_flip()
+
+# ^ Really like this plot!
+
+```
+
+Chapter 2: Linear Mixed-Effect Models
+
+Random-effect syntax (for using lme4):
+
+- (1 | group): random intercept with a fixed mean
+- (1 | g1/g2): intercepts vary among g1 and g2 within g2
+- (1 | g1) + (1 | g2): random intercepts for two variables
+- x + (x | g): correlated random slope and intercept
+- x + (x || g): uncorrelated random slope and intercept
+
+```{r}
+
+# Using birth data
+countyBirthsData <- read_csv("https://assets.datacamp.com/production/repositories/1803/datasets/eb95cb6973afa56c38ba53cfd8058c72f768322f/countyBirthsDataUse.csv")
+
+# Counties exist within states, and perhaps states contribute to variability. Hence, the need for random effects.
+
+# To start, we build a hierarchical model with a global intercept (fixed-effect) and random-effect for state.
+mod1 <- lmer(formula = BirthRate ~ (1 | State),
+             data = countyBirthsData)
+
+summary(mod1)
+# plot the residuals
+plot(mod1)
+
+countyBirthsData$predictState <- predict(mod1, countyBirthsData)
+
+ggplot(data = countyBirthsData) +
+  theme_minimal() +
+  geom_point(aes(x = TotalPopulation, y = BirthRate)) +
+  geom_point(aes(x = TotalPopulation, y = predictState),
+             color = "blue", alpha = 0.5)
+
+# Random-effects intercepts estimated for each state. This allowed us to account for each state having its own intercept.
+
+# Let's include a fixed effect: average age of mother.
+
+mod2 <- lmer(formula = BirthRate ~ AverageAgeofMother + (1 | State), 
+             data = countyBirthsData)
+
+summary(mod2) 
+
+# Now we want a random-effects slope for each state. A random-effect slope may be estimated for each group using the (slope | group) syntax. 
+
+# Adding total population of each state as a random effect (it's numeric, hence slope not intercept)
+
+countyBirthsData <- countyBirthsData %>%
+  mutate(LogTotalPop = log10(TotalPopulation))
+
+mod3 <- lmer(formula = BirthRate ~ AverageAgeofMother + (LogTotalPop | State),
+             data = countyBirthsData)
+
+# Uncorrelated random effects model (use the || syntax):
+mod4 <- lmer(formula = BirthRate ~ AverageAgeofMother + (LogTotalPop || State),
+             data = countyBirthsData)
+
+summary(mod4) # Not good. Need to the more complex model (mod3)
+
+# A predictor can be both a fixed-effect and a random-effect (e.g., mothers age)
+mod5 <- lmer(formula = BirthRate ~ AverageAgeofMother + (AverageAgeofMother | State),
+             data = countyBirthsData)
+
+summary(mod5) # This is helpful for prediction, as you can correct the effect of age of mother by state (diff slope estimates by state)
+
+
+
+```
+
+REML - restricted maximum likelihood method
+
+```{r}
+
+# Extracting coefficients
+
+# Fixed effects:
+fixef(mod5)
+# Random effects:
+ranef(mod5)
+# Confidence intervals for fe:
+confint(mod5)
+
+
+tidy(mod5, conf.int = TRUE)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
