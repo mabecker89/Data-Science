@@ -181,6 +181,40 @@ tidy(mod5, conf.int = TRUE)
 
 ```
 
+Using Maryland Crime data
+
+```{r}
+
+MDcrime <- read_csv("https://assets.datacamp.com/production/repositories/1803/datasets/e5e076efd3c3b7665a3180da9f95aaaf671f6a61/MDcrime.csv")
+
+ggplot(data = MDcrime, aes(x = Year, y = Crime, group = County)) +
+  geom_line() +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_minimal() +
+  ylab("Major crimes reported per country across time.")
+
+# Looks like we will require a random-effect intercept, and likely a random-effect slope. 
+
+# Try a linear model:
+mod1 <- lm(formula = Crime ~ Year, data = MDcrime)
+summary(mod1) # Year(2) not significant. Note: need to use Year2 variable.
+
+# Fit the model with Year(2) as both a fixed and random-effect:
+mod2 <- lmer(formula = Crime ~ Year2 + ( 1 + Year2 | County), data = MDcrime)
+summary(mod2)
+
+# ANOVA - Analysis of Variance
+# Build a null model with only County as a random-effect
+null_model <- lmer(Crime ~ (1 | County), data = MDcrime)
+# Build alternative model, with Year2 as a fixed and random slope and County as a random effect
+alt_model <- lmer(Crime ~ Year2 + (1 + Year2 | County), data = MDcrime)
+
+# Compare models - look at Chi square test.
+anova(null_model, alt_model)
+
+```
+
+# Chapter 3: Generalized Linear Mixed-Effects Models
 
 
 
