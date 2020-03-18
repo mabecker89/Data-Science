@@ -216,7 +216,67 @@ anova(null_model, alt_model)
 
 # Chapter 3: Generalized Linear Mixed-Effects Models
 
+Topics covered in this chapter (for future reference):
 
++ Logisitic regression with glm() - family = "binomial"
++ Poisson regression with glm() - family = "poisson" -> for count data.
++ Plotting logistic regression results with ggplot - stat_smooth(method = "glm", method.args = list(family = "binomial"))
++ Using glmer() to estimate glms with mixed effects.
++ Handling different data inputs (e.g. matrix with cbind)
++ Calculating odds-ratios with exp(fixef()) and exp(confint()). Can also be done via tidy()
++ Using ggplot to visualize random-effects poisson models 
+
+# Chapter 4: Repeated Measures
+
+Paired t-test -> special case of a t-test
+
+t.test(paired = TRUE) -> does not assume equal variance of both groups. 
+
+Repeated measures ANOVA -> tests if means are constant across time.
+^ simply a special type of mixed effects model.
+
+```{r}
+
+set.seed(1234)
+
+n_ind <- 10
+before <- rnorm(n = n_ind, mean = 0, sd = 0.5)
+after <- before + rnorm(n = n_ind, mean = 4.5, sd = 5)
+
+t.test(before, after, paired = F)
+t.test(before, after, paired = T) # Paired is more powerful. 
+
+dat <- data.frame(y = c(before, after),
+                  trial = rep(c("before", "after"), each = n_ind),
+                  ind = rep(letters[1:n_ind], times = 2))
+
+# Now do it with lmer:
+mod <- lmer(y ~ trial + (1|ind), data = dat)
+summary(mod) # Woot. Pretty much the same (same t value, p value)
+
+
+
+```
+
+```{r}
+
+htcrime <- read_csv("https://assets.datacamp.com/production/repositories/1803/datasets/45e88fe1bc8d1d76d140e69cb873da9eddb7008e/hateNY.csv")
+
+# Is the number of hate crimes changing over time in NY counties? 
+# 1) Is the state-wide number of hate crimes changing?
+# 2) Are the number of hate crimes changing differently in each county?
+
+# Step 1. Visualize
+
+ggplot(data = htcrime, mapping = aes(x = Year, y = TotalIncidents, group = County)) +
+  geom_line() +
+  geom_smooth(method = "glm", method.args = c("poisson"), se = FALSE)
+
+# We can see that different counties have different trends. Therefore it would be appropriate to use different random-effect slopes for each group (county).
+
+
+
+```
 
 
 
