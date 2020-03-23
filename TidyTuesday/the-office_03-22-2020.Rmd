@@ -1,0 +1,129 @@
+---
+title: "The Office"
+author: "Marcus Becker"
+date: "March 22, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(tidyverse)
+library(schrute)
+
+office_ratings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-17/office_ratings.csv')
+
+office_transcripts <- as_tibble(theoffice)
+
+```
+
+```{r}
+
+# Let's plot the popularity of the office over time!
+
+office_ratings %>%
+  mutate(title = fct_inorder(title),
+         episode_number = row_number()) %>%
+  ggplot(aes(episode_number, imdb_rating)) +
+  geom_line() +
+  geom_smooth() +
+  geom_point(aes(color = factor(season), size = total_votes)) +
+  geom_text(aes(label = title), check_overlap = TRUE, hjust = 1) +
+  expand_limits(x = -10) +
+  theme_light() +
+  labs(x = "Episode Number",
+       y = "IMDB Rating",
+       title = "Popularity of Office Episodes Over Time",
+       subtitle = "Colour represents season, size represents number of votes.") +
+  theme(legend.position = "none")
+
+```
+
+```{r}
+
+
+office_transcripts <- as_tibble(theoffice) %>%
+  mutate(season = as.integer(season),
+         episode = as.integer(episode)) %>%
+  mutate(character = str_remove_all(character, '"')) %>%
+  mutate(name = str_to_lower(str_remove_all(episode_name, "\\.| \\(Part.*")))
+
+
+office_ratings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-17/office_ratings.csv')
+
+office_ratings <- office_ratings %>%
+  mutate(name = str_to_lower(str_remove_all(title, "\\.| \\(Part.*|\\: Part.*")))
+
+
+twss <- office_transcripts %>%
+  filter(str_detect(text, "that's what she said|That's what she said|That's what he said|that's what he said|THAT'S WHAT SHE SAID"))
+
+twss_1 <- twss %>%
+  select(season, episode, name) %>%
+  distinct
+
+office_ratings_2 <- office_ratings %>%
+  mutate(twss_joke = ifelse(name %in% twss_1$name, "Yes", "No"))
+
+colors <- c("grey70", "#ff8800")
+
+or2 <- office_ratings_2 %>%
+    mutate(name = fct_inorder(name),
+         episode_number = row_number(),
+         twss_joke = factor(twss_joke))
+
+# create text grobs, one for each color
+
+t1 <- textGrob(expression("How do episodes with " * phantom(bold("That's What She Said! ")) * "jokes stack up?"),
+               x = 0.5, y = 1.1, gp = gpar(col = "black"))
+t2 <- textGrob(expression(phantom("How do episodes with ") * bold("That's What She Said! ") * phantom("jokes stack up?")),
+                          x = 0.5, y = 1.1, gp = gpar(col = "#ff8800"))
+
+plot <- or2 %>%
+  ggplot(aes(episode_number, imdb_rating)) +
+  geom_line() +
+  geom_smooth(se = FALSE) +
+  geom_point(aes(color = twss_joke), size = 4) +
+  geom_text(data = or2[or2$twss_joke == "Yes",], aes(label = title), check_overlap = TRUE, hjust = 1, size = 3, fontface = "bold") +
+  scale_color_manual(values = colors) +
+  expand_limits(x = -15) +
+  theme_light() +
+  labs(x = "Episode Number",
+       y = "IMDB Rating",
+       caption = "Data courtesy of the `shrute` package and the R4DS #tidytuesday project.") +
+  scale_x_continuous(breaks = seq(0,190,25)) +
+  scale_y_continuous(breaks = seq(6,10, 0.25)) +
+  theme(plot.margin = unit(c(6, 2, 2, 2), "lines")) +
+  annotation_custom(grobTree(t1, t2)) +
+  theme(legend.position = "none",
+        axis.title = element_text(size = 13, face = "bold"),
+        panel.grid.minor = element_blank())
+
+# create gtable and remove clipping
+g <- ggplot_gtable(ggplot_build(plot))
+g$layout$clip[g$layout$name == "panel"] <- "off"
+
+# re-draw
+grid.draw(g)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

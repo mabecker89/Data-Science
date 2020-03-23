@@ -2,7 +2,9 @@
 title: "Hierarchical and Mixed Effects Models in R"
 author: "Marcus Becker"
 date: "February 15, 2020"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -70,28 +72,39 @@ What about continuous predictor variables? -> slopes.
 ```{r}
 
 # Mixed effects model (i.e. has both fixed and random effects)
-me_mod <- lmer(formula = mathgain ~ sex + mathprep + mathknow + (1|classid) + (1|schoolid),
-               data = studentData,
-               na.action = "na.omit",
-               REML = TRUE)
-
-summary(me_mod)
+me_mod <- lme4::lmer(formula = mathgain ~ sex + ses + mathprep + mathknow + mathkind + (1|classid) + (1|schoolid),
+                     data = studentData,
+                     na.action = "na.omit",
+                     REML = TRUE)
 
 # Extract out the coefficients
-modelOutPlot <- broom.mixed::tidy(me_mod, conf.int = TRUE) # note: have to use broom.extra for me models
-
-modelOutPlot <- modelOutPlot[modelOutPlot$effect == "fixed" &
-                             modelOutPlot$term != "(Intercept)", ]
+df_coef <- broom.mixed::tidy(me_mod, conf.int = TRUE, conf.level = 0.95)
+# Keep only fixed effects coefficients
+df_coef <- df_coef[df_coef$effect == "fixed" &
+                   df_coef$term != "(Intercept)", ]
 
 # Plot the coefficients of interest
-ggplot(data = modelOutPlot, aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high)) +
-  theme_minimal() +
-  geom_hline(yintercept = 0.0, color = "red", size = 2) +
-  geom_point() +
-  geom_linerange() +
+test <- modelOutPlot %>%
+  mutate(term = fct_reorder(term, estimate)) %>%
+  ggplot(aes(x = term, y = estimate, ymin = conf.low, ymax = conf.high)) +
+  theme_classic() +
+  geom_hline(yintercept = 0.0, color = "red", size = 1.5) +
+  geom_errorbar(width = 0.2) +
+  geom_point(size = 3) +
+  scale_x_discrete(labels = c("Gender", "Math Kind", "Math Prep", "Math Know", "Socioeconomic")) +
+  scale_y_continuous(breaks = seq(-6, 8, 2)) +
+  labs(x = "",
+       y = "Estimate",
+       title = "Which factors impact a student's gain in math achievement score?",
+       subtitle = "Display of fixed effect estimates and 95% confidence intervals.",
+       caption = "Note: 'Math Know' and 'Math Prep' refer to the teacher's\n level of math knowledge and preparation.") +
   coord_flip()
 
+
+
 # ^ Really like this plot!
+
+test <- ranef(me_mod)$School
 
 ```
 
