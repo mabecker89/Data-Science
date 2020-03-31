@@ -1,0 +1,146 @@
+---
+title: "Defensive R Programming"
+author: "Marcus Becker"
+date: "March 31, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Chapter 1: Avoiding Conflict
+
+- Beware when updating packages -> you could fix serious bugs, but also you could potentially be breaking working code.
+- Use Task Views (from CRAN)
+- When working in R, objects that are created are placed in the global environment
+- Packages use *namespaces* as spaces for name - you can think of a namespace as a box that contains the package.
+- A namespace helps keep things tidy - sort of like folders.
+- Namespace clashes are challenging! e.g. filter.
+
+```{r}
+
+# Return a vector of exported functions:
+length(getNamespaceExports("dplyr")) # 262 exported functions!
+length(getNamespaceExports("abmi.camera.extras")) # Three exported functions :/ lol.
+# What about the tidyverse in total ... ?
+length(getNamespaceExports("tidyverse")) # doesn't quick work the same. 
+
+search()
+
+library(conflicted) # this package is now bumped to the top of the search path.
+
+library(dplyr)
+
+filter() # Throws are error! Conflicted forces us to make our call of filter explicit, ie dplyr::filter or stats::filter
+
+```
+
+# Chapter 2: Early Warning Systems
+
+- Boolean operators TRUE/FALSE -> special values in R. Can't be overrided. Watch out for T/F.
+- the message() function: signals to the user the state of a process; contains helpful information; very handy for long running processes.
+
+```{r}
+
+suppressPackageStartupMessages(library(dplyr))
+
+# Supressing messages
+sim = suppressMessages(simulate(runs = 5))
+
+N <- 10
+results <- numeric(N)
+for (i in 1:N) {
+  results[i] <- simulate()
+  # Show a progress report with a message()
+  message("Simulation", i, "complete!")
+}
+
+# Writing a function
+get_distribution <- function(N, verbose = TRUE) {
+  results <- numeric(N)
+  for(i in 1:N) {
+    results[i] <- simulate()
+    # Check if verbose = TRUE
+    if(isTRUE(verbose)) {
+      # Show a progress report
+      message("Simulation", i, "complete!")
+    }
+  }
+  return(results)
+}
+
+get_distribution(N = 10, verbose = TRUE)
+
+```
+
+- The warning message. Signals that something may have gone wrong, but R continues. 
+
+```{r}
+
+# Create new variable
+x <- c(1,1,1)
+y <- 1:3
+
+# Calculate correlation coefficient
+m <- cor(x,y) # get a warning
+
+suppressWarnings(cor(x,y))
+
+```
+
+- Stop! Sometimes things are broken. We need to raise an error.
+- You can't suppress (or ignore) errors. The definition of an error is that R can't continue. Instead, we *catch* errors.
+
+```{r}
+
+# Stop the execution if ages are negative
+mean_age <- function(ages) {
+  if(any(ages < 0 | ages > 150)) {
+    stop("You have negative ages, or you're too old.")
+  }
+  mean(ages)
+}
+
+ages <- c(54, 45, 67, 151)
+
+mean_age(ages)
+
+```
+
+# Chapter 3. Preparing your defences.
+
+DRY - Do not repeat yourself. 
+WET - Write everything twice (should be avoided). We enjoy typing. 
+
+Comments - avoid comments you will never update. Be consistent.
+
+Avoid using '.' (full stops) in variable or function names. They have a special meaning in R.
+
+Don't mix and match assignment (e.g. <- or =)
+
+Consistent spacing makes code far easier to read.
+- use spaces around assignment arrows
+- use spaces after a comma
+
+The `lintr` package offers static code analysis for R. Similar to a spell check, but for formatting. Save your code (.R) and run lintr on it.
+
+# Chapter 4. A Battle Plan
+
+Consistency in file names: 
++ Dashes seem to be the best. Underscores are ok. Spaces are terrible.
+Organizing a project:
++ Every project - has its own directory, has a sensible file structure.
++ R/, load.R, clean.R, function.R, analysis.R ... etc. 
++ Don't use absolute paths. 
++ Graphics and output - output/ and graphics/
+
+
+
+
+
+
+
+
+
+
