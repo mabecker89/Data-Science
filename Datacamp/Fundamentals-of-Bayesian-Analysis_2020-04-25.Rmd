@@ -1,0 +1,243 @@
+---
+title: "Fundamentals of Bayesian Data Analysis in R"
+author: "Marcus Becker"
+date: "April 25, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(dplyr)
+
+```
+
+# What is Bayesian Data Analysis?
+
+Probabilistic inference
+
+Probability - a statement about certainty / uncertainty.
+
+The role of probability distributions in Bayesian data analysis is to represent uncertainty, and the role of Bayesian inference is to update probability distributions to reflect what has been learned from data. Cool.
+
+Prior probability distribution ->  a distribution over some unknown quantity that you have prior to updating with data.
+Samples
+Posterior probability distribution -> updated with data.
+
+A point estimate is a single number used to summarise what's known about a parameter of interest. It can be seen as a "best guess" of the value of the parameter. A commonly used point is the median of the posterior. It's the midpoint of the distribution, and it's equally probable for the parameter value to be larger than the median as it is to be smaller than it. 
+
+# How does Bayesian inference work?
+
+Data, Generative Model, Priors. 
+
+```{r}
+
+# Let's build a generative model
+prop_success <- 0.42
+n_zombies <- 100
+
+# Simulating data
+data <- c()
+for(zombie in 1:n_zombies) {
+  data[zombie] <- runif(1, min = 0, max = 1) < prop_success
+}
+
+data <- as.numeric(data)
+
+# The above was a binomial distribution.
+rbinom(1, size = 100, prob = 0.42)
+
+```
+
+Prior probability distribution.
+
+```{r}
+
+# Example of Ad clicks. The social media site says that their ads get clicked on 10% of the time. You are not so sure.
+
+# Proportion clicks could be as low as 0% or as high as 20%, as a uniform distribution.
+
+n_samples <- 100000
+n_ads_shown <- 100
+
+proportion_clicks <- runif(n = n_samples, min = 0, max = 0.2) # this is our 'priors'
+
+n_visitors_to_my_site <- rbinom(n = n_samples, size = n_ads_shown, prob = proportion_clicks)
+# The results is that samples in n_visitors now also incorporate the uncertainty in what the underlying proportion of clicks could be.
+
+hist(proportion_clicks) # uniform
+hist(n_visitors_to_my_site)
+
+```
+
+The essence of bayesian inference: conditioning on data, in order to learn about parameter values. 
+
+```{r}
+
+prior <- data.frame(proportion_clicks, n_visitors_to_my_site)
+
+# Joint probability distribution
+ggplot(data = prior, aes(x = n_visitors_to_my_site, y = proportion_clicks)) +
+  geom_point(alpha = 0.5, color = "cornflowerblue", size = 2) +
+  theme_minimal()
+
+# We want the marginal distribution, i.e. histograms on side of plot.
+# e.g. if we knew proportion clicks was 10%, we could condition on this. 
+# We can condition on the data, too. i.e, number of visitors to the site. Therefore, we can reduce uncertainty in the parameter.
+
+```
+
+*prior* is the uncertainty before having included the information in the data (df prior)
+
+*posterior* is the uncertainty after having included the data.
+
+```{r}
+
+# For example, we got 13 visitors to the site when we ran our ad campaign with 100 ads.
+
+posterior <- prior[prior$n_visitors_to_my_site == 13,]
+
+hist(posterior$proportion_clicks) # not uniform anymore. We know more things!
+
+# Can we use this info to predict how many visitors we would get if we reran the ad campaign?
+# Use the posterior as a new prior for the next ad campaign! 
+
+
+# new prior
+prior2 <- posterior
+
+n_samples <- nrow(prior2)
+n_ads_shown <- 100
+prior2$n_visitors_to_my_site <- rbinom(n_samples, n_ads_shown, prob = prior2$proportion_clicks) # use proportions derived previously
+
+hist(prior$n_visitors_to_my_site)
+
+```
+
+# Chapter 3: Why use Bayesian Data Analysis?
+
+Bayes is flexible!
+
+1. You can include information sources in addition to the data. (uh, aerial surveys ... ?)
+
+- Prior probability distribution -> you can change this. 
+- Beta distribution! Cool.
+
+
+```{r}
+
+# Beta distribution is a useful probability distribution when you want model uncertainty over a parameter bounded between 0 and 1. 
+
+# Shape parameters must be positive.
+beta_sample <- rbeta(10e6, shape1 = 100, shape2 = 100)
+hist(beta_sample)
+
+# The larger the shape parameters are, the more concentrated the beta distribution becomes. When used as a prior, this Beta distribution encodes the information that the parameter is most likely close to 0.5.
+
+# The larger the shape1 parameter is the closer the resulting distribution is to 1, and the larger shape2 is the closer it is to 0.
+
+beta_sample2 <- rbeta(10e4, shape1 = 20, shape2 = 100)
+hist(beta_sample2)
+
+# Say you're told that "most ads get clicked 5% of the time, but some as low as 2% and some as high as 8%"
+
+informative_prior <- rbeta(10e4, shape1 = 5, shape2 = 95)
+hist(informative_prior)
+
+```
+
+2. You can make any comparisons between groups or data sets.
+
+```{r}
+
+# e.g. Video vs Text ads
+
+# Result: Video gets 13, and Text gets 6. How much more effective were the Video adds?
+
+n_samples <- 100000
+n_ads_shown <- 100
+
+proportion_clicks <- runif(n = n_samples, min = 0, max = 0.2) # this is our 'priors'
+
+n_visitors_to_my_site <- rbinom(n = n_samples, size = n_ads_shown, prob = proportion_clicks)
+
+prior <- data.frame(proportion_clicks, n_visitors_to_my_site)
+
+# Create posteriors for video and text ads
+posterior_video <- prior[prior$n_visitors_to_my_site == 13,]
+posterior_text <- prior[prior$n_visitors_to_my_site == 6,]
+
+posterior <- data.frame(
+  video_prop = posterior_video$proportion_clicks[1:4500],
+  text_prop = posterior_text$proportion_clicks[1:4500]
+)
+
+# Calculate difference
+posterior$prop_diff <- posterior$video_prop - posterior$text_prop
+
+hist(posterior$prop_diff)
+# Calculate median
+median(posterior$prop_diff)
+# Calculate the probability that proportion of clicks is larger for video than text
+sum(posterior$prop_diff > 0) / length(posterior$prop_diff)
+
+```
+
+3. You can use the result of a Bayesian analysis to do Decision Analysis.
+
+```{r}
+
+video_cost <- 0.25
+text_cost <- 0.05
+visitor_spend <- 2.53
+
+# Let's see which choice is more efficient (i.e. profit-maximizing!)
+
+posterior$video_profit <- posterior$video_prop * visitor_spend - video_cost
+posterior$text_profit <- posterior$text_prop * visitor_spend - text_cost
+
+posterior <- posterior %>%
+  mutate(profit_diff = video_profit - text_profit)
+
+median(posterior$profit_diff)
+
+sum(posterior$profit_diff < 0) / length(posterior$profit_diff)
+
+```
+
+4. You can change the underlying statistical model.
+
+The poisson distribution simulates a process where the outcome is a number of occurrences per day/year/area/unit/etc. 
+
+```{r}
+
+x <- rpois(10000, lambda = 3)
+
+hist(x)
+
+n_draws <- 100000
+mean_clicks <- runif(n_draws, min = 0, max = 80)
+n_visitors <- rpois(n = n_draws, mean_clicks)
+
+prior <- data.frame(mean_clicks, n_visitors)
+posterior <- prior[prior$n_visitors == 19, ]
+
+# Visualize mean_clicks
+hist(prior$mean_clicks)
+hist(posterior$mean_clicks)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

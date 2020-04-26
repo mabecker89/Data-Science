@@ -1,0 +1,406 @@
+---
+title: "Foundations of Probability in R"
+author: "Marcus Becker"
+date: "April 3, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Chapter 1. The Binomial Distribution
+
+```{r}
+
+rbinom(1, 1, 0.5) # Binomial distribution. Number of draws, number of coins to flip on each draw, probability. 
+
+rbinom(10, 1, 0.5) # 10 draws, one flip per draw.
+
+rbinom(10, 10, 0.5) # 10 draws, 10 flips per draw.
+
+rbinom(1, 10, 0.5) # 1 draw, 10 flips per draw. 
+
+rbinom(1000, 10, 0.5)
+
+rbinom(100, 10, 0.3)
+
+```
+
+Simulating outcomes:
+
+What's the probability that X = 5 when you flip a coin 10 times? (i.e. X being 5 means you got 5 heads and 5 tails)
+
+```{r}
+
+# Let's simulate
+flips <- rbinom(100000, 10, 0.5)
+
+mean(flips == 5) # Nice little trick. The 'density' of the binomial at that point. 
+
+# Now let's find out exactly.
+dbinom(5, 10, 0.5) # Arguments: the point we're estimating the density at, the number of flips, and the probability.
+
+# What about cumulative density? e.g. probability that X is <= 4.
+mean(flips <= 4)
+
+pbinom(4, 10, 0.5)
+
+# If you flip 10 coins each with 30% prob of coming up heads, what is the probability exactly 2 of them are heads?
+dbinom(2, 10, 0.3)
+
+# Now find out via simulation
+mean(rbinom(1000000, 10, 0.3) == 2)
+
+# Now what's the probability that at least five are heads?
+1 - pbinom(4, 10, 0.3)
+
+# Now find out via simulation
+mean(rbinom(1000000, 10, 0.3) >= 5)
+
+```
+
+Expected value and variance
+
+Variance -> how spread out is it?
+
++ Average squared distance from the mean of the sample.
++ Formula: # of flips x the probability x (1 - the probability)
+
+```{r}
+
+X <- rbinom(10000, 10, 0.5)
+
+var(X) # Avg square distance between mean (5) and one random draw.
+
+# Calculate directly
+10 * 0.5 * (1 - 0.5)
+
+```
+
+# Chapter 2. Laws of Probability
+
+Probability of event A and B
++ Pr(A and B) = Pr(A) * Pr(B)
+
+```{r}
+
+A <- rbinom(100, 1, 0.5)
+
+B <- rbinom(100, 1, 0.5)
+
+mean(A & B)
+
+```
+
+Probability of event A or B
+
+- Imagine as two overlapping circles in a Venn diagram <- overall region is the probability.
+- Have to subtract where the circles overlap
++ Pr(A) + Pr(B) - Pr(A * B)
+
+```{r}
+
+A <- rbinom(100, 1, 0.5)
+B <- rbinom(100, 1, 0.5)
+
+mean(A | B)
+
+```
+
+Multipling random variables
+
+X ~ Binomial(10, 0.5)
+Y ~ 3 * X
+What are the properties of Y? e.g. expected value and variance.
+
+```{r}
+
+X <- rbinom(100000, 10, 0.5)
+
+mean(X)
+
+Y <- 3 * X
+
+mean(Y)
+
+# Multiply the random variable by a constant, you also multiply the expected value by that constant.
+
+var(X) # 2.5
+var(Y) # 22.5
+
+# Variance increases: Var(k * X) = k^2 * Var(X)
+
+```
+
+These rules hold true for many different distributions. 
+
+Adding two random variables together. 
+
+```{r}
+
+X <- rbinom(100000, 10, 0.5)
+Y <- rbinom(100000, 100, 0.2)
+
+Z <- X + Y
+
+# General rule: The E[X + Y] = E[X] + E[Y]
+mean(Z)
+
+var(X)
+var(Y)
+
+# Another rule: Var[X + Y] = Var[X] + Var[Y]
+var(Z)
+
+
+```
+
+# Chapter 3. Bayesian Statistics
+
+Updating with evidence.
+
+Suppose you're trying to figure out whether a coin is biased. You flip it 20 times and it came up heads 14 times. Is it biased?
+
+In this example, we don't know if it is or not; so, there's a 50/50 chance it is.
+
+```{r}
+
+# 50,000 fair coins
+fair <- rbinom(50000, 20, 0.5)
+sum(fair == 14) # 1844
+
+# 50,000 biased coins
+biased <- rbinom(50000, 20, 0.75)
+sum(biased == 14) # 8349
+
+1844 + 8349
+
+# Pr(of being biased | 14 heads) = i.e. the probability that the coin is biased, given a result of 14 heads...
+
+# = # biased with 14 heads / # total with 14 heads
+8349 / (1844 + 8349) # 82%
+
+# Posterior probability.
+
+```
+
+Prior probability
+
+This time, suppose we really think that it's fair. Therefore, we asign a prior probability that the coin is fair 90/10, i.e. there's a 90% chance that the coin is fair.
+
+```{r}
+
+# Simulate with differently sized piles.
+fair <- rbinom(90000, 20, 0.5)
+sum(fair == 14)
+biased <- rbinom(10000, 20, 0.75)
+sum(biased == 14)
+
+sum(fair == 14) / (sum(fair == 14) + sum(biased == 14)) # 0.67. Hmm, now we think that there's only a 67% chance the coin is fair!
+
+# Can do with 3 outcomes as well!
+
+```
+
+Bayes' theorem
+
+```{r}
+
+fair1 <- dbinom(10, 20, 0.5)
+fair2 <- dbinom(11, 20, 0.5)
+fair3 <- dbinom(12, 20, 0.5)
+fair4 <- dbinom(13, 20, 0.5)
+fair5 <- dbinom(14, 20, 0.5)
+fair6 <- dbinom(15, 20, 0.5)
+fair7 <- dbinom(16, 20, 0.5)
+fair8 <- dbinom(17, 20, 0.5)
+fair9 <- dbinom(18, 20, 0.5)
+fair10 <- dbinom(19, 20, 0.5)
+fair11 <- dbinom(20, 20, 0.5)
+
+biased1 <- dbinom(10, 20, 0.75)
+biased2 <- dbinom(11, 20, 0.75)
+biased3 <- dbinom(12, 20, 0.75)
+biased4 <- dbinom(13, 20, 0.75)
+biased5 <- dbinom(14, 20, 0.75)
+biased6 <- dbinom(15, 20, 0.75)
+biased7 <- dbinom(16, 20, 0.75)
+biased8 <- dbinom(17, 20, 0.75)
+biased9 <- dbinom(18, 20, 0.75)
+biased10 <- dbinom(19, 20, 0.75)
+biased11 <- dbinom(20, 20, 0.75)
+
+fair1 / (fair1 + biased1) # 0.95
+fair2 / (fair2 + biased2) # 0.85
+
+fair9 / (fair9 + biased9)
+
+```
+
+# Chapter 4. Related Distributions
+
+Drawing from binomial -> results approximates a normal distribution. (Gaussian, bell). 
+Normal dist is a good approx of the binomial
+
+```{r}
+
+# Comparing the two
+binom_sample <- rbinom(100000, 1000, 0.2)
+norm_sample <- rnorm(100000, 200, sqrt(160))
+
+mean(binom_sample <= 190)
+
+mean(norm_sample <= 190)
+
+# Cumulative probability density
+pbinom(190, 1000, 0.20)
+
+pnorm(190, 200, sqrt(160))
+
+# Comparing distributions for the normal and binomial for low n (i.e. sample size) ... relevant!
+
+binom_sample <- rbinom(100000, 10, 0.2)
+norm_sample <- rnorm(100000, 2, sqrt(10 * 0.2 * (1 - 0.2)))
+
+hist(binom_sample)
+hist(norm_sample)
+
+```
+
+The Poisson distribution
+
+For rare events!
+
+```{r}
+
+binomial <- rbinom(100000, 1000, 1/1000)
+hist(binomial)
+
+poisson <- rpois(100000, 1) # 1 is the mean. (lambda)
+hist(poisson)
+
+# variance is equal to mean.
+
+mean(rbinom(100000, 1000, 0.002))
+mean(rpois(100000, 2))
+
+poisson_sample <- rpois(100000, 2)
+mean(poisson_sample == 0)
+hist(poisson_sample)
+dpois(0, 2)
+
+# When you add multiple Poisson distributions together, the result is also a poisson distribution.
+
+```
+
+The geometric distribution.
+
+I have a coin with a 10% chance of being heads. How long will I have to flip it until I get a heads?
+
+```{r}
+
+which(rbinom(100, 1, 0.1) == 1)[1]
+
+reps <- replicate(10000, which(rbinom(100, 1, 0.1) == 1)[1]) # geometric distribution. 
+
+qplot(reps)
+
+geom <- rgeom(100000, 0.1)
+
+mean(geom)
+
+# general rule: E[X] = (1 / p) - 1
+
+# useful application: e.g. A machine has a 10% chance of breaking each day. How long will it last?
+
+# Probability that it will break on the 5th day or earlier:
+pgeom(4, 0.1)
+
+# Probability that the machine is still working by the end of the 20th day:
+1 - pgeom(19, 0.1)
+
+```
+
+
+```{r}
+
+# Thinking about dice. Cool.
+
+library(extrafont)
+# font_import()
+loadfonts(device = "win")
+library(ggplot2)
+library(dplyr)
+
+roll_two_dice <- function(load = NULL, sum = FALSE) {
+  
+  if(is.null(load)) {
+    load <- rep(1, 6)
+  } else {
+    load
+  }
+  
+  roll <- sample(x = 6,
+                 size = 2,
+                 replace = TRUE,
+                 prob = load)
+  
+  if(isTRUE(sum)) {
+    return(sum(roll))
+  } else {
+    roll
+  }
+}
+
+sim <- replicate(100000, roll_two_dice(sum = TRUE))
+
+mean(abs(sim1 - 9) <= 1) # Rolling an 8, 9, or 10. ~ 33%
+mean(sim1 == 10) + mean(sim1 == 9) # Rolling a 9 or 10. ~ 19%
+mean(sim1 == 9) + mean(sim1 == 8) # Rolling an 8 or 9. ~ 24%
+
+# Plot the simulation results (sum of two-dice rolls), highlighting 9.
+p <- data.frame(rep = c(1:100000), result = sim) %>%
+  mutate(target = ifelse(result == 9, "1", "0")) %>%
+  ggplot(mapping = aes(x = result)) +
+    geom_bar(aes(y = (..count..)/sum(..count..), fill = target), color = "black") +
+    scale_x_continuous(breaks = seq(1, 12, 1)) +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0,0.2)) +
+    scale_fill_manual(values = c("grey70", "#ff8800")) +
+    geom_text(aes(label = scales::percent(..prop.., accuracy = 0.01), y = ..prop..), 
+              stat = "count", vjust = -0.5, size = 3.25, family = "Gloucester MT Extra Condensed") +
+    labs(y = "",
+         x = "Outcome",
+         title = "Simulating Dice Outcomes in R:  Sum of Two-Dice Rolls",
+         subtitle = "How likely are rolls of 9?",
+         caption = "Note: Outcomes based on a Monte Carlo simulation of 100,000 rolls") +
+    theme_minimal() +
+    theme(legend.position = "none",
+          text = element_text("Gloucester MT Extra Condensed"),
+          title = element_text(size = 16),
+          plot.caption = element_text(face = "italic"))
+
+# Evaluating outcomes
+sim2 <- data.frame(t(replicate(100000, roll_two_dice(sum = FALSE))))
+
+# Rolls that would be considered a 'success'
+roll <- c("3,1", "5,3", "6,4", "6,3", "5,1", "6,2", "4,1", "3,3")
+
+outcomes <- sim2 %>%
+  mutate(roll_order1 = paste0(X1, ",", X2),
+         roll_order2 = paste0(X2, ",", X1),
+         success = case_when(
+           roll_order1 %in% roll | roll_order2 %in% roll ~ TRUE,
+           TRUE ~ FALSE
+         ))
+
+# Probability of hitting a successful role?
+mean(outcomes$success) # ~ 41%
+
+# Probability of a favourable outcome after the next two turns?
+(1 - mean(sim == 9)) * mean(outcomes$success)
+
+```
+
+
+
